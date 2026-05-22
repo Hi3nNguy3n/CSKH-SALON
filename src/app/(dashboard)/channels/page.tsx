@@ -698,6 +698,128 @@ function PhoneCard({
   );
 }
 
+function ZaloCard({
+  channel,
+  onSave,
+  onAction,
+  saving,
+}: {
+  channel: ChannelData;
+  onSave: (type: string, config: Record<string, unknown>, isActive: boolean) => void;
+  onAction: (type: string, action: string) => void;
+  saving: boolean;
+}) {
+  const cfg = channel.config as Record<string, string>;
+  const [isActive, setIsActive] = useState(channel.isActive);
+  const [pythonCommand, setPythonCommand] = useState(cfg.pythonCommand || "python3");
+  const [scriptPath, setScriptPath] = useState(cfg.scriptPath || "zalo_bot.py");
+  const [cookiesInput, setCookiesInput] = useState(cfg.cookiesInput || "");
+  const isConnected = channel.status === "connected";
+
+  return (
+    <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
+      <div className="px-5 py-4 border-b border-owly-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-cyan-50 text-cyan-600">
+              <MessageCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-owly-text">Zalo</h3>
+              <p className="text-xs text-owly-text-light mt-0.5">
+                Listener cho chatbot và gửi tin nhắn qua Zalo
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <StatusBadge status={channel.status} />
+            <Toggle enabled={isActive} onChange={setIsActive} />
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <FieldInput
+          label="Python Command"
+          value={pythonCommand}
+          onChange={setPythonCommand}
+          placeholder="python3"
+        />
+        <FieldInput
+          label="Script Path"
+          value={scriptPath}
+          onChange={setScriptPath}
+          placeholder="zalo_bot.py"
+        />
+        <div>
+          <label className="block text-xs font-medium text-owly-text-light mb-1">
+            Cookies
+          </label>
+          <textarea
+            value={cookiesInput}
+            onChange={(e) => setCookiesInput(e.target.value)}
+            rows={6}
+            placeholder='{"cookies": {...}, "imei": "...", "userAgent": "..."}'
+            className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-bg text-owly-text placeholder:text-owly-text-light/50 focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary transition-colors resize-none"
+          />
+        </div>
+
+        {isConnected ? (
+          <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-cyan-600" />
+            <span className="text-sm text-cyan-700">
+              Zalo listener đang chạy
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() =>
+            onSave(
+              "zalo",
+              { pythonCommand, scriptPath, cookiesInput },
+              isActive
+            )
+          }
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction("zalo", isConnected ? "disconnect" : "connect")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
+            isConnected
+              ? "text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
+              : "text-cyan-700 bg-cyan-50 border border-cyan-200 hover:bg-cyan-100"
+          )}
+        >
+          {isConnected ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
+          {isConnected ? "Disconnect" : "Connect"}
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction("zalo", "test")}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg hover:bg-cyan-100 transition-colors"
+        >
+          <TestTube className="h-4 w-4" />
+          Test
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
@@ -724,13 +846,19 @@ export default function ChannelsPage() {
       const res = await fetch("/api/channels");
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      const whatsappRes = await fetch("/api/channels/whatsapp");
+      const [whatsappRes, zaloRes] = await Promise.all([
+        fetch("/api/channels/whatsapp"),
+        fetch("/api/channels/zalo"),
+      ]);
       const whatsappLive = whatsappRes.ok ? await whatsappRes.json() : null;
+      const zaloLive = zaloRes.ok ? await zaloRes.json() : null;
 
       setChannels(
         data.map((channel: ChannelData) =>
           channel.type === "whatsapp" && whatsappLive
             ? { ...channel, status: whatsappLive.status, qr: whatsappLive.qr }
+            : channel.type === "zalo" && zaloLive
+              ? { ...channel, status: zaloLive.status }
             : channel
         )
       );
@@ -745,13 +873,17 @@ export default function ChannelsPage() {
     fetchChannels();
   }, [fetchChannels]);
 
-  // Poll WhatsApp status to update QR code
+  // Poll channel live status
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const res = await fetch("/api/channels/whatsapp");
-        if (res.ok) {
-          const live = await res.json();
+        const [waRes, zaloRes] = await Promise.all([
+          fetch("/api/channels/whatsapp"),
+          fetch("/api/channels/zalo"),
+        ]);
+
+        if (waRes.ok) {
+          const live = await waRes.json();
           setChannels(prev => {
             const wa = prev.find(ch => ch.type === "whatsapp");
             if (wa?.status === "connected" && live.status === "connected") return prev;
@@ -762,7 +894,16 @@ export default function ChannelsPage() {
             );
           });
         }
-      } catch (err) {}
+
+        if (zaloRes.ok) {
+          const live = await zaloRes.json();
+          setChannels((prev) =>
+            prev.map((ch) =>
+              ch.type === "zalo" ? { ...ch, status: live.status } : ch
+            )
+          );
+        }
+      } catch {}
     }, 2000);
     return () => clearInterval(interval);
   }, []);
@@ -836,7 +977,7 @@ export default function ChannelsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-owly-primary" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl">
             <WhatsAppCard
               channel={getChannel("whatsapp")}
               onSave={handleSave}
@@ -851,6 +992,12 @@ export default function ChannelsPage() {
             />
             <PhoneCard
               channel={getChannel("phone")}
+              onSave={handleSave}
+              onAction={handleAction}
+              saving={saving}
+            />
+            <ZaloCard
+              channel={getChannel("zalo")}
               onSave={handleSave}
               onAction={handleAction}
               saving={saving}

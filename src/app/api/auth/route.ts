@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Ensure channels exist
-    for (const type of ["whatsapp", "email", "phone"]) {
+    for (const type of ["whatsapp", "email", "phone", "zalo"]) {
       await prisma.channel.upsert({
         where: { type },
         update: {},

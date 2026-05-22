@@ -40,8 +40,8 @@ export async function resolveCustomer(
     return directMatch.id;
   }
 
-  // Step 2: Normalized phone match (for phone/whatsapp channels)
-  if (channel === "phone" || channel === "whatsapp") {
+  // Step 2: Normalized phone match (for phone/whatsapp/zalo channels)
+  if (channel === "phone" || channel === "whatsapp" || channel === "zalo") {
     const normalized = normalizePhone(customerContact);
     if (normalized.length >= 7) {
       const phoneMatch = await prisma.customer.findFirst({
@@ -104,6 +104,10 @@ async function findByChannelField(channel: string, contact: string) {
       return prisma.customer.findFirst({
         where: { phone: contact },
       });
+    case "zalo":
+      return prisma.customer.findFirst({
+        where: { phone: contact },
+      });
     default:
       return null;
   }
@@ -122,6 +126,7 @@ async function createCustomer(
       ...(channel === "email" ? { email: contact } : {}),
       ...(channel === "whatsapp" ? { whatsapp: contact } : {}),
       ...(channel === "phone" ? { phone: contact } : {}),
+      ...(channel === "zalo" ? { phone: contact } : {}),
     },
   });
 
@@ -154,6 +159,7 @@ async function updateExistingCustomer(
   if (channel === "email" && !customer.email) update.email = contact;
   if (channel === "whatsapp" && !customer.whatsapp) update.whatsapp = contact;
   if (channel === "phone" && !customer.phone) update.phone = contact;
+  if (channel === "zalo" && !customer.phone) update.phone = contact;
 
   // Update name if current is "Unknown" and we have a better one
   if (customer.name === "Unknown" && name && name !== "Unknown") {

@@ -56,6 +56,9 @@ interface SettingsData {
   whatsappMode: string;
   whatsappApiKey: string;
   whatsappPhone: string;
+  zaloPythonCommand: string;
+  zaloScriptPath: string;
+  zaloCookiesInput: string;
 }
 
 type SectionKey =
@@ -64,7 +67,8 @@ type SectionKey =
   | "voice"
   | "phone"
   | "email"
-  | "whatsapp";
+  | "whatsapp"
+  | "zalo";
 
 interface TabDef {
   key: SectionKey;
@@ -83,6 +87,7 @@ const tabs: TabDef[] = [
   { key: "phone", label: "Phone (Twilio)", icon: Phone },
   { key: "email", label: "Email (SMTP/IMAP)", icon: Mail },
   { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
+  { key: "zalo", label: "Zalo", icon: MessageCircle },
 ];
 
 // Which fields belong to each section (used for partial saves)
@@ -103,6 +108,7 @@ const sectionFields: Record<SectionKey, (keyof SettingsData)[]> = {
     "imapPass",
   ],
   whatsapp: ["whatsappMode", "whatsappApiKey", "whatsappPhone"],
+  zalo: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -760,6 +766,46 @@ function WhatsAppSection({
   );
 }
 
+function ZaloSection({
+  data,
+  update,
+}: {
+  data: SettingsData;
+  update: (field: keyof SettingsData, value: string | number) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="p-4 rounded-lg bg-owly-primary-50/50 border border-owly-primary/20">
+        <p className="text-sm text-owly-text">
+          Dán cookies Zalo để hệ thống trích xuất session và tạo file zalo_cookies.json cùng zalo_imei.json cho bot Python.
+        </p>
+      </div>
+      <FormField label="Python command" description="Lệnh chạy bot Zalo trên máy chủ.">
+        <TextInput
+          value={data.zaloPythonCommand}
+          onChange={(v) => update("zaloPythonCommand", v)}
+          placeholder="python3"
+        />
+      </FormField>
+      <FormField label="Script path" description="Đường dẫn tới file zalo_bot.py trong project.">
+        <TextInput
+          value={data.zaloScriptPath}
+          onChange={(v) => update("zaloScriptPath", v)}
+          placeholder="zalo_bot.py"
+        />
+      </FormField>
+      <FormField label="Cookies" description="Dán JSON cookies hoặc chuỗi cookie header có chứa imei.">
+        <TextareaInput
+          value={data.zaloCookiesInput}
+          onChange={(v) => update("zaloCookiesInput", v)}
+          placeholder='[{"key":"imei","value":"..."}]'
+          rows={8}
+        />
+      </FormField>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main settings page
 // ---------------------------------------------------------------------------
@@ -793,6 +839,9 @@ const defaultSettings: SettingsData = {
   whatsappMode: "web",
   whatsappApiKey: "",
   whatsappPhone: "",
+  zaloPythonCommand: "python3",
+  zaloScriptPath: "zalo_bot.py",
+  zaloCookiesInput: "",
 };
 
 export default function SettingsPage() {
@@ -811,15 +860,24 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((settings) => {
+    Promise.all([
+      fetch("/api/settings").then((r) => r.json()),
+      fetch("/api/channels").then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([settings, channels]) => {
         const merged = { ...defaultSettings };
         for (const key of Object.keys(merged) as (keyof SettingsData)[]) {
           if (settings[key] !== undefined && settings[key] !== null) {
             (merged as Record<string, unknown>)[key] = settings[key];
           }
         }
+        const zalo = Array.isArray(channels)
+          ? channels.find((channel: { type: string }) => channel.type === "zalo")
+          : null;
+        const zaloConfig = (zalo?.config || {}) as Record<string, string>;
+        merged.zaloPythonCommand = zaloConfig.pythonCommand || defaultSettings.zaloPythonCommand;
+        merged.zaloScriptPath = zaloConfig.scriptPath || defaultSettings.zaloScriptPath;
+        merged.zaloCookiesInput = zaloConfig.cookiesInput || defaultSettings.zaloCookiesInput;
         setData(merged);
       })
       .catch(() => addToast("error", "Lỗi khi tải cài đặt"))
@@ -833,6 +891,28 @@ export default function SettingsPage() {
   const saveSection = async () => {
     setSaving(true);
     try {
+      if (activeTab === "zalo") {
+        const response = await fetch("/api/channels/zalo", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              pythonCommand: data.zaloPythonCommand,
+              scriptPath: data.zaloScriptPath,
+              cookiesInput: data.zaloCookiesInput,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "Save failed");
+        }
+
+        addToast("success", "Đã lưu cấu hình Zalo và tạo file session");
+        return;
+      }
+
       const fields = sectionFields[activeTab];
       const payload: Record<string, unknown> = {};
       for (const f of fields) {
@@ -861,6 +941,7 @@ export default function SettingsPage() {
     phone: <PhoneSection data={data} update={update} />,
     email: <EmailSection data={data} update={update} />,
     whatsapp: <WhatsAppSection data={data} update={update} />,
+    zalo: <ZaloSection data={data} update={update} />,
   };
 
   if (loading) {
@@ -921,6 +1002,8 @@ export default function SettingsPage() {
                   "Cấu hình máy chủ gửi và nhận email cho các phiếu hỗ trợ."}
                 {activeTab === "whatsapp" &&
                   "Cấu hình tích hợp WhatsApp để hỗ trợ qua tin nhắn."}
+                {activeTab === "zalo" &&
+                  "Dán cookies để chuẩn bị session và file cấu hình cho bot Zalo."}
               </p>
             </div>
 
