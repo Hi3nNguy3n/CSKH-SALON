@@ -17,6 +17,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import {
+  AI_PROVIDER_OPTIONS,
+  GEMINI_PROVIDER,
+  DEFAULT_GEMINI_MODEL,
+} from "@/lib/ai/catalog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -471,23 +476,7 @@ function AISection({
   data: SettingsData;
   update: (field: keyof SettingsData, value: string | number) => void;
 }) {
-  const modelOptions: Record<string, { value: string; label: string }[]> = {
-    openai: [
-      { value: "gpt-4o", label: "GPT-4o" },
-      { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-      { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
-    ],
-    claude: [
-      { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4" },
-      { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-      { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku" },
-    ],
-    ollama: [
-      { value: "llama3", label: "Llama 3" },
-      { value: "mistral", label: "Mistral" },
-      { value: "codellama", label: "Code Llama" },
-    ],
-  };
+  const selectedProvider = AI_PROVIDER_OPTIONS.find((p) => p.value === data.aiProvider) || AI_PROVIDER_OPTIONS[0];
 
   return (
     <div className="space-y-5">
@@ -496,34 +485,33 @@ function AISection({
           value={data.aiProvider}
           onChange={(v) => {
             update("aiProvider", v);
-            const models = modelOptions[v];
-            if (models && models.length > 0) {
-              update("aiModel", models[0].value);
+            const providerDef = AI_PROVIDER_OPTIONS.find((p) => p.value === v);
+            if (providerDef && providerDef.models.length > 0) {
+              update("aiModel", providerDef.models[0]);
             }
           }}
-          options={[
-            { value: "openai", label: "OpenAI" },
-            { value: "claude", label: "Claude (Anthropic)" },
-            { value: "ollama", label: "Ollama (Local)" },
-          ]}
+          options={AI_PROVIDER_OPTIONS.map((p) => ({
+            value: p.value,
+            label: p.label,
+          }))}
         />
       </FormField>
       <FormField label="Mô hình" description="Mô hình AI cụ thể sẽ sử dụng.">
         <SelectInput
           value={data.aiModel}
           onChange={(v) => update("aiModel", v)}
-          options={modelOptions[data.aiProvider] || []}
+          options={
+            selectedProvider
+              ? selectedProvider.models.map((m) => ({ value: m, label: m }))
+              : []
+          }
         />
       </FormField>
-      <FormField label="API Key" description="Mã API của nhà cung cấp. Không bắt buộc với Ollama.">
+      <FormField label="API Key" description="Mã API của nhà cung cấp.">
         <PasswordInput
           value={data.aiApiKey}
           onChange={(v) => update("aiApiKey", v)}
-          placeholder={
-            data.aiProvider === "ollama"
-              ? "Không bắt buộc cho mô hình nội bộ"
-              : "Nhập mã API của bạn"
-          }
+          placeholder="Nhập mã API của bạn"
         />
       </FormField>
       <FormField label="Số token tối đa" description="Số lượng token tối đa cho mỗi phản hồi của AI.">
@@ -783,8 +771,8 @@ const defaultSettings: SettingsData = {
   welcomeMessage: "Hello! How can I help you today?",
   tone: "friendly",
   language: "auto",
-  aiProvider: "openai",
-  aiModel: "gpt-4o-mini",
+  aiProvider: GEMINI_PROVIDER,
+  aiModel: DEFAULT_GEMINI_MODEL,
   aiApiKey: "",
   maxTokens: 2048,
   temperature: 0.7,
