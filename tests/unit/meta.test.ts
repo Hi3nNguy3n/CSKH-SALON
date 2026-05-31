@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   parseMetaWebhookPayload,
   sendMetaTextMessage,
+  splitMetaText,
   verifyMetaSignature,
 } from "@/lib/channels/meta";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,7 @@ describe("Meta channel adapter", () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    mockPrisma.channel.findUnique.mockReset();
     process.env = { ...originalEnv };
   });
 
@@ -130,6 +132,24 @@ describe("Meta channel adapter", () => {
     expect(verifyMetaSignature(rawBody, "sha256=bad", secret)).toBe(false);
   });
 
+  it("should keep short Meta text as one chunk", () => {
+    expect(splitMetaText("Hello salon", 20)).toEqual(["Hello salon"]);
+  });
+
+  it("should split long Meta text into chunks under the max length", () => {
+    const text = [
+      "First paragraph has useful salon details.",
+      "Second paragraph has more booking details.",
+      "Third paragraph is intentionally longer than the chunk limit and should be split safely.",
+    ].join("\n\n");
+
+    const chunks = splitMetaText(text, 55);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk) => chunk.length <= 55)).toBe(true);
+    expect(chunks.join("\n\n")).toContain("First paragraph");
+  });
+
   it("should send Facebook and Instagram messages with separate tokens", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -175,6 +195,128 @@ describe("Meta channel adapter", () => {
         }),
       })
     );
+  });
+
+  it("should send long messages as multiple chunks in order", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
+    process.env.META_MAX_MESSAGE_LENGTH = "10";
+
+    await sendMetaTextMessage({
+      channel: "facebook",
+      recipientId: "psid-1",
+      text: "1234567890 1234567890",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string).message.text).toBe(
+      "1234567890"
+    );
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body as string).message.text).toBe(
+      "1234567890"
+    );
+  });
+
+  it("should retry temporary Send API failures", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        text: vi.fn().mockResolvedValue("rate limited"),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
+    process.env.META_SEND_MAX_RETRIES = "1";
+
+    await sendMetaTextMessage({
+      channel: "facebook",
+      recipientId: "psid-1",
+      text: "Hello",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("should retry network Send API failures", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
+    process.env.META_SEND_MAX_RETRIES = "1";
+
+    await sendMetaTextMessage({
+      channel: "instagram",
+      recipientId: "ig-sender-1",
+      text: "Hello",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("should stop sending chunks after a chunk fails", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: vi.fn().mockResolvedValue(""),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: vi.fn().mockResolvedValue("unauthorized"),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
+    process.env.META_MAX_MESSAGE_LENGTH = "10";
+
+    await expect(
+      sendMetaTextMessage({
+        channel: "facebook",
+        recipientId: "psid-1",
+        text: "1234567890 1234567890 1234567890",
+      })
+    ).rejects.toThrow("Meta Send API failed with status 401");
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("should not retry non-temporary Send API failures", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: vi.fn().mockResolvedValue("unauthorized"),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
+    process.env.META_SEND_MAX_RETRIES = "2";
+
+    await expect(
+      sendMetaTextMessage({
+        channel: "facebook",
+        recipientId: "psid-1",
+        text: "Hello",
+      })
+    ).rejects.toThrow("Meta Send API failed with status 401");
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("should prefer DB config over env tokens", async () => {

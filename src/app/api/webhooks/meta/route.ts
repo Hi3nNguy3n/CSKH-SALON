@@ -5,6 +5,11 @@ import {
   verifyMetaSignature,
 } from "@/lib/channels/meta";
 import { handleExternalChannelMessage } from "@/lib/channels/external-message";
+import {
+  getPositiveIntegerEnv,
+  TimeoutError,
+  withTimeout,
+} from "@/lib/channels/hardening";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 
@@ -57,6 +62,32 @@ async function hasValidSignature(rawBody: string, signatureHeader: string | null
   );
 }
 
+function getEventTimeoutMs(): number {
+  return getPositiveIntegerEnv("META_WEBHOOK_EVENT_TIMEOUT_MS", 8000);
+}
+
+async function processMetaEvent(event: ReturnType<typeof parseMetaWebhookPayload>[number]) {
+  const startedAt = Date.now();
+  const result = await handleExternalChannelMessage({
+    channel: event.channel,
+    customerContact: event.customerContact,
+    customerName: event.customerName,
+    text: event.text,
+  });
+
+  await sendMetaTextMessage({
+    channel: event.channel,
+    recipientId: event.senderId,
+    text: result.response,
+  });
+
+  logger.info("[Meta Webhook] Processed event", {
+    channel: event.channel,
+    conversationId: result.conversationId,
+    durationMs: Date.now() - startedAt,
+  });
+}
+
 export async function GET(request: NextRequest) {
   const verifyTokens = await getVerifyTokens();
   if (verifyTokens.length === 0) {
@@ -105,22 +136,24 @@ export async function POST(request: NextRequest) {
   }
 
   const events = parseMetaWebhookPayload(payload);
+  const timeoutMs = getEventTimeoutMs();
 
   for (const event of events) {
     try {
-      const result = await handleExternalChannelMessage({
-        channel: event.channel,
-        customerContact: event.customerContact,
-        customerName: event.customerName,
-        text: event.text,
-      });
-
-      await sendMetaTextMessage({
-        channel: event.channel,
-        recipientId: event.senderId,
-        text: result.response,
-      });
+      await withTimeout(
+        processMetaEvent(event),
+        timeoutMs,
+        `Meta ${event.channel} event`
+      );
     } catch (error) {
+      if (error instanceof TimeoutError) {
+        logger.warn("[Meta Webhook] Event processing timed out", {
+          channel: event.channel,
+          timeoutMs,
+        });
+        continue;
+      }
+
       logger.error("[Meta Webhook] Failed to process event", error, {
         channel: event.channel,
       });

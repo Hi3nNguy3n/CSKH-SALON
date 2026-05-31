@@ -1024,11 +1024,24 @@ const defaultSettings: SettingsData = {
 
 const metaWebhookPath = "/api/webhooks/meta";
 
+function isLocalAppOrigin(origin: string): boolean {
+  try {
+    const url = new URL(origin);
+    return ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 function buildMetaCallbackUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
   const origin =
     configuredUrl ||
     (typeof window !== "undefined" ? window.location.origin : "");
+
+  if (!origin || isLocalAppOrigin(origin)) {
+    return `<PUBLIC_APP_URL>${metaWebhookPath}`;
+  }
 
   return origin ? `${origin.replace(/\/$/, "")}${metaWebhookPath}` : metaWebhookPath;
 }

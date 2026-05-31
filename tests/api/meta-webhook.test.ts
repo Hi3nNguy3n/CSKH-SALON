@@ -114,6 +114,60 @@ describe("Meta webhook route", () => {
     expect(data).toEqual({ ok: true, received: 0 });
   });
 
+  it("should accept a valid env app secret signature", async () => {
+    process.env.META_APP_SECRET = "env-app-secret";
+    const body = {
+      object: "instagram",
+      entry: [{ messaging: [{ sender: { id: "1" }, recipient: { id: "2" }, read: {} }] }],
+    };
+    const rawBody = JSON.stringify(body);
+    const signature =
+      "sha256=" + crypto.createHmac("sha256", "env-app-secret").update(rawBody).digest("hex");
+
+    const { POST } = await import("@/app/api/webhooks/meta/route");
+    const response = await POST(
+      createRequest("/api/webhooks/meta", {
+        method: "POST",
+        headers: { "x-hub-signature-256": signature },
+        body,
+      })
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it("should reject an invalid env app secret signature", async () => {
+    process.env.META_APP_SECRET = "env-app-secret";
+
+    const { POST } = await import("@/app/api/webhooks/meta/route");
+    const response = await POST(
+      createRequest("/api/webhooks/meta", {
+        method: "POST",
+        headers: { "x-hub-signature-256": "sha256=bad" },
+        body: { object: "page", entry: [] },
+      })
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("should reject an invalid DB app secret candidate signature", async () => {
+    mockPrisma.channel.findMany.mockResolvedValue([
+      { config: { appSecret: "db-app-secret" } },
+    ]);
+
+    const { POST } = await import("@/app/api/webhooks/meta/route");
+    const response = await POST(
+      createRequest("/api/webhooks/meta", {
+        method: "POST",
+        headers: { "x-hub-signature-256": "sha256=bad" },
+        body: { object: "page", entry: [] },
+      })
+    );
+
+    expect(response.status).toBe(401);
+  });
+
   it("should process POST text events and reply through Meta", async () => {
     process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
     process.env.META_GRAPH_VERSION = "v25.0";
@@ -154,6 +208,41 @@ describe("Meta webhook route", () => {
       "https://graph.facebook.com/v25.0/me/messages?access_token=fb-token",
       expect.any(Object)
     );
+  });
+
+  it("should return 200 when event processing times out", async () => {
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
+    process.env.META_WEBHOOK_EVENT_TIMEOUT_MS = "1";
+    const { POST } = await import("@/app/api/webhooks/meta/route");
+    const { handleExternalChannelMessage } = await import("@/lib/channels/external-message");
+    vi.mocked(handleExternalChannelMessage).mockImplementationOnce(
+      () => new Promise(() => undefined)
+    );
+
+    const response = await POST(
+      createRequest("/api/webhooks/meta", {
+        method: "POST",
+        body: {
+          object: "page",
+          entry: [
+            {
+              messaging: [
+                {
+                  sender: { id: "psid-1" },
+                  recipient: { id: "page-1" },
+                  message: { text: "Slow hello" },
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
+    const data = await parseJsonResponse(response);
+
+    expect(response.status).toBe(200);
+    expect(data).toEqual({ ok: true, received: 1 });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("should return 200 and ignore non-text payloads", async () => {
