@@ -5,6 +5,9 @@ import {
   sendMetaTextMessage,
   verifyMetaSignature,
 } from "@/lib/channels/meta";
+import { prisma } from "@/lib/prisma";
+
+const mockPrisma = prisma as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>>>;
 
 describe("Meta channel adapter", () => {
   const originalEnv = { ...process.env };
@@ -135,7 +138,7 @@ describe("Meta channel adapter", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    process.env.META_GRAPH_VERSION = "v21.0";
+    process.env.META_GRAPH_VERSION = "v25.0";
     process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "fb-token";
     process.env.INSTAGRAM_ACCESS_TOKEN = "ig-token";
 
@@ -152,7 +155,7 @@ describe("Meta channel adapter", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://graph.facebook.com/v21.0/me/messages?access_token=fb-token",
+      "https://graph.facebook.com/v25.0/me/messages?access_token=fb-token",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -163,7 +166,7 @@ describe("Meta channel adapter", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://graph.instagram.com/v21.0/me/messages?access_token=ig-token",
+      "https://graph.instagram.com/v25.0/me/messages?access_token=ig-token",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -173,5 +176,97 @@ describe("Meta channel adapter", () => {
       })
     );
   });
-});
 
+  it("should prefer DB config over env tokens", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.META_GRAPH_VERSION = "v25.0";
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "env-fb-token";
+    mockPrisma.channel.findUnique.mockResolvedValue({
+      config: {
+        pageAccessToken: "db-fb-token",
+        graphVersion: "v24.0",
+      },
+    });
+
+    await sendMetaTextMessage({
+      channel: "facebook",
+      recipientId: "psid-1",
+      text: "Hello",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://graph.facebook.com/v24.0/me/messages?access_token=db-fb-token",
+      expect.any(Object)
+    );
+  });
+
+  it("should fall back to env token if DB config lookup fails", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.META_GRAPH_VERSION = "v25.0";
+    process.env.INSTAGRAM_ACCESS_TOKEN = "env-ig-token";
+    mockPrisma.channel.findUnique.mockRejectedValue(new Error("DB unavailable"));
+
+    await sendMetaTextMessage({
+      channel: "instagram",
+      recipientId: "ig-sender-1",
+      text: "Hello",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://graph.instagram.com/v25.0/me/messages?access_token=env-ig-token",
+      expect.any(Object)
+    );
+  });
+
+  it("should not mix Facebook and Instagram DB tokens", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: vi.fn().mockResolvedValue(""),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.FACEBOOK_PAGE_ACCESS_TOKEN = "env-fb-token";
+    process.env.INSTAGRAM_ACCESS_TOKEN = "env-ig-token";
+    mockPrisma.channel.findUnique.mockImplementation(async ({ where }) => {
+      if (where.type === "facebook") {
+        return { config: { pageAccessToken: "db-fb-token", graphVersion: "v25.0" } };
+      }
+      if (where.type === "instagram") {
+        return { config: { accessToken: "db-ig-token", graphVersion: "v25.0" } };
+      }
+      return null;
+    });
+
+    await sendMetaTextMessage({
+      channel: "facebook",
+      recipientId: "psid-1",
+      text: "Facebook",
+    });
+    await sendMetaTextMessage({
+      channel: "instagram",
+      recipientId: "ig-sender-1",
+      text: "Instagram",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://graph.facebook.com/v25.0/me/messages?access_token=db-fb-token",
+      expect.any(Object)
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://graph.instagram.com/v25.0/me/messages?access_token=db-ig-token",
+      expect.any(Object)
+    );
+  });
+});

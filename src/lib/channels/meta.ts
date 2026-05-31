@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
 
 export type MetaChannel = "facebook" | "instagram";
 
@@ -102,21 +103,50 @@ export function verifyMetaSignature(
 }
 
 function getGraphVersion(): string {
-  return process.env.META_GRAPH_VERSION?.trim() || "v21.0";
+  return process.env.META_GRAPH_VERSION?.trim() || "v25.0";
 }
 
-function getAccessToken(channel: MetaChannel): string {
+function getConfigString(config: unknown, key: string): string {
+  if (!isRecord(config)) return "";
+  const value = config[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+async function getChannelConfig(channel: MetaChannel): Promise<unknown> {
+  try {
+    const record = await prisma.channel.findUnique({
+      where: { type: channel },
+      select: { config: true },
+    });
+    return record?.config ?? {};
+  } catch (error) {
+    logger.warn("[Meta] Failed to read channel config; falling back to env", {
+      channel,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {};
+  }
+}
+
+async function getGraphVersionForChannel(channel: MetaChannel): Promise<string> {
+  const config = await getChannelConfig(channel);
+  return getConfigString(config, "graphVersion") || getGraphVersion();
+}
+
+async function getAccessToken(channel: MetaChannel): Promise<string> {
+  const config = await getChannelConfig(channel);
   const envName =
     channel === "facebook" ? "FACEBOOK_PAGE_ACCESS_TOKEN" : "INSTAGRAM_ACCESS_TOKEN";
-  const token = process.env[envName]?.trim();
+  const configKey = channel === "facebook" ? "pageAccessToken" : "accessToken";
+  const token = getConfigString(config, configKey) || process.env[envName]?.trim();
   if (!token) {
     throw new Error(`Missing ${envName}`);
   }
   return token;
 }
 
-function getSendEndpoint(channel: MetaChannel): string {
-  const version = getGraphVersion();
+async function getSendEndpoint(channel: MetaChannel): Promise<string> {
+  const version = await getGraphVersionForChannel(channel);
   const host =
     channel === "facebook" ? "https://graph.facebook.com" : "https://graph.instagram.com";
   return `${host}/${version}/me/messages`;
@@ -135,8 +165,8 @@ export async function sendMetaTextMessage(input: {
   recipientId: string;
   text: string;
 }): Promise<void> {
-  const token = getAccessToken(input.channel);
-  const endpoint = getSendEndpoint(input.channel);
+  const token = await getAccessToken(input.channel);
+  const endpoint = await getSendEndpoint(input.channel);
   const url = `${endpoint}?access_token=${encodeURIComponent(token)}`;
 
   const response = await fetch(url, {
@@ -158,4 +188,3 @@ export async function sendMetaTextMessage(input: {
     throw new Error(`Meta Send API failed with status ${response.status}`);
   }
 }
-

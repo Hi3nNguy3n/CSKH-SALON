@@ -59,6 +59,20 @@ interface SettingsData {
   zaloPythonCommand: string;
   zaloScriptPath: string;
   zaloCookiesInput: string;
+  facebookVerifyToken: string;
+  facebookPageAccessToken: string;
+  facebookPageId: string;
+  facebookGraphVersion: string;
+  facebookAppSecret: string;
+  hasFacebookPageAccessToken: boolean;
+  hasFacebookAppSecret: boolean;
+  instagramVerifyToken: string;
+  instagramAccessToken: string;
+  instagramBusinessAccountId: string;
+  instagramGraphVersion: string;
+  instagramAppSecret: string;
+  hasInstagramAccessToken: boolean;
+  hasInstagramAppSecret: boolean;
 }
 
 type SectionKey =
@@ -68,7 +82,9 @@ type SectionKey =
   | "phone"
   | "email"
   | "whatsapp"
-  | "zalo";
+  | "zalo"
+  | "facebook"
+  | "instagram";
 
 interface TabDef {
   key: SectionKey;
@@ -88,6 +104,8 @@ const tabs: TabDef[] = [
   { key: "email", label: "Email (SMTP/IMAP)", icon: Mail },
   { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { key: "zalo", label: "Zalo", icon: MessageCircle },
+  { key: "facebook", label: "Facebook", icon: MessageCircle },
+  { key: "instagram", label: "Instagram", icon: MessageCircle },
 ];
 
 // Which fields belong to each section (used for partial saves)
@@ -109,6 +127,8 @@ const sectionFields: Record<SectionKey, (keyof SettingsData)[]> = {
   ],
   whatsapp: ["whatsappMode", "whatsappApiKey", "whatsappPhone"],
   zalo: [],
+  facebook: [],
+  instagram: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -806,6 +826,150 @@ function ZaloSection({
   );
 }
 
+function FacebookSection({
+  data,
+  update,
+  callbackUrl,
+}: {
+  data: SettingsData;
+  update: (field: keyof SettingsData, value: string | number) => void;
+  callbackUrl: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="p-4 rounded-lg bg-owly-primary-50/50 border border-owly-primary/20">
+        <p className="text-sm text-owly-text mb-3">
+          Kết nối Facebook Page Messenger qua Meta webhook chung. Facebook và Instagram dùng cùng endpoint.
+        </p>
+        <div className="rounded-md border border-owly-primary/20 bg-owly-surface px-3 py-2 font-mono text-xs text-owly-text break-all">
+          {callbackUrl}
+        </div>
+      </div>
+      <FormField label="Webhook Verify Token" description="Token dùng khi Meta xác minh webhook. Nên giống META_VERIFY_TOKEN nếu đang cấu hình bằng .env.">
+        <PasswordInput
+          value={data.facebookVerifyToken}
+          onChange={(v) => update("facebookVerifyToken", v)}
+          placeholder="meta-test-token-123"
+        />
+      </FormField>
+      <FormField
+        label="Page Access Token"
+        description={
+          data.hasFacebookPageAccessToken
+            ? "Secret. Đã cấu hình. Để trống nếu không muốn thay đổi."
+            : "Secret của Facebook Page dùng để gửi phản hồi Messenger."
+        }
+      >
+        <PasswordInput
+          value={data.facebookPageAccessToken}
+          onChange={(v) => update("facebookPageAccessToken", v)}
+          placeholder="Nhập Page access token"
+        />
+      </FormField>
+      <FormField label="Page ID" description="ID Facebook Page, dùng để ghi chú và kiểm tra cấu hình.">
+        <TextInput
+          value={data.facebookPageId}
+          onChange={(v) => update("facebookPageId", v)}
+          placeholder="1234567890"
+        />
+      </FormField>
+      <FormField label="Graph API Version" description="Phiên bản Graph API dùng khi gọi Send API.">
+        <TextInput
+          value={data.facebookGraphVersion}
+          onChange={(v) => update("facebookGraphVersion", v)}
+          placeholder="v25.0"
+        />
+      </FormField>
+      <FormField
+        label="App Secret"
+        description={
+          data.hasFacebookAppSecret
+            ? "Secret. Đã cấu hình. Để trống nếu không muốn thay đổi."
+            : "Tùy chọn. Secret dùng để verify x-hub-signature-256 khi webhook POST tới hệ thống."
+        }
+      >
+        <PasswordInput
+          value={data.facebookAppSecret}
+          onChange={(v) => update("facebookAppSecret", v)}
+          placeholder="Nhập Meta app secret"
+        />
+      </FormField>
+    </div>
+  );
+}
+
+function InstagramSection({
+  data,
+  update,
+  callbackUrl,
+}: {
+  data: SettingsData;
+  update: (field: keyof SettingsData, value: string | number) => void;
+  callbackUrl: string;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="p-4 rounded-lg bg-owly-primary-50/50 border border-owly-primary/20">
+        <p className="text-sm text-owly-text mb-3">
+          Kết nối Instagram Direct Messaging API trực tiếp qua Meta webhook chung. Không dùng bridge qua Facebook Messenger.
+        </p>
+        <div className="rounded-md border border-owly-primary/20 bg-owly-surface px-3 py-2 font-mono text-xs text-owly-text break-all">
+          {callbackUrl}
+        </div>
+      </div>
+      <FormField label="Webhook Verify Token" description="Token dùng khi Meta xác minh webhook. Có thể dùng cùng token với Facebook vì callback chung là /api/webhooks/meta.">
+        <PasswordInput
+          value={data.instagramVerifyToken}
+          onChange={(v) => update("instagramVerifyToken", v)}
+          placeholder="meta-test-token-123"
+        />
+      </FormField>
+      <FormField
+        label="Instagram Access Token"
+        description={
+          data.hasInstagramAccessToken
+            ? "Secret. Đã cấu hình. Để trống nếu không muốn thay đổi."
+            : "Secret dùng để gửi phản hồi qua Instagram Direct Messaging API."
+        }
+      >
+        <PasswordInput
+          value={data.instagramAccessToken}
+          onChange={(v) => update("instagramAccessToken", v)}
+          placeholder="Nhập Instagram access token"
+        />
+      </FormField>
+      <FormField label="Instagram Business Account ID" description="ID tài khoản Instagram Business/Professional dùng cho setup và kiểm tra.">
+        <TextInput
+          value={data.instagramBusinessAccountId}
+          onChange={(v) => update("instagramBusinessAccountId", v)}
+          placeholder="17841400000000000"
+        />
+      </FormField>
+      <FormField label="Graph API Version" description="Phiên bản Graph API dùng khi gọi Send API Instagram.">
+        <TextInput
+          value={data.instagramGraphVersion}
+          onChange={(v) => update("instagramGraphVersion", v)}
+          placeholder="v25.0"
+        />
+      </FormField>
+      <FormField
+        label="App Secret"
+        description={
+          data.hasInstagramAppSecret
+            ? "Secret. Đã cấu hình. Để trống nếu không muốn thay đổi."
+            : "Tùy chọn. Secret dùng để verify x-hub-signature-256 khi webhook POST tới hệ thống."
+        }
+      >
+        <PasswordInput
+          value={data.instagramAppSecret}
+          onChange={(v) => update("instagramAppSecret", v)}
+          placeholder="Nhập Meta app secret"
+        />
+      </FormField>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main settings page
 // ---------------------------------------------------------------------------
@@ -842,7 +1006,32 @@ const defaultSettings: SettingsData = {
   zaloPythonCommand: "python3",
   zaloScriptPath: "zalo_bot.py",
   zaloCookiesInput: "",
+  facebookVerifyToken: "",
+  facebookPageAccessToken: "",
+  facebookPageId: "",
+  facebookGraphVersion: "v25.0",
+  facebookAppSecret: "",
+  hasFacebookPageAccessToken: false,
+  hasFacebookAppSecret: false,
+  instagramVerifyToken: "",
+  instagramAccessToken: "",
+  instagramBusinessAccountId: "",
+  instagramGraphVersion: "v25.0",
+  instagramAppSecret: "",
+  hasInstagramAccessToken: false,
+  hasInstagramAppSecret: false,
 };
+
+const metaWebhookPath = "/api/webhooks/meta";
+
+function buildMetaCallbackUrl(): string {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  const origin =
+    configuredUrl ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+
+  return origin ? `${origin.replace(/\/$/, "")}${metaWebhookPath}` : metaWebhookPath;
+}
 
 export default function SettingsPage() {
   const [data, setData] = useState<SettingsData>(defaultSettings);
@@ -850,6 +1039,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<SectionKey>("general");
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [metaCallbackUrl, setMetaCallbackUrl] = useState(metaWebhookPath);
 
   const addToast = useCallback((type: "success" | "error", message: string) => {
     const id = Date.now();
@@ -860,6 +1050,8 @@ export default function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    setMetaCallbackUrl(buildMetaCallbackUrl());
+
     Promise.all([
       fetch("/api/settings").then((r) => r.json()),
       fetch("/api/channels").then((r) => (r.ok ? r.json() : [])),
@@ -878,6 +1070,32 @@ export default function SettingsPage() {
         merged.zaloPythonCommand = zaloConfig.pythonCommand || defaultSettings.zaloPythonCommand;
         merged.zaloScriptPath = zaloConfig.scriptPath || defaultSettings.zaloScriptPath;
         merged.zaloCookiesInput = zaloConfig.cookiesInput || defaultSettings.zaloCookiesInput;
+
+        const facebook = Array.isArray(channels)
+          ? channels.find((channel: { type: string }) => channel.type === "facebook")
+          : null;
+        const facebookConfig = (facebook?.config || {}) as Record<string, string>;
+        merged.facebookVerifyToken = facebookConfig.verifyToken || "";
+        merged.facebookPageAccessToken = "";
+        merged.facebookPageId = facebookConfig.pageId || "";
+        merged.facebookGraphVersion =
+          facebookConfig.graphVersion || defaultSettings.facebookGraphVersion;
+        merged.facebookAppSecret = "";
+        merged.hasFacebookPageAccessToken = Boolean(facebookConfig.hasPageAccessToken);
+        merged.hasFacebookAppSecret = Boolean(facebookConfig.hasAppSecret);
+
+        const instagram = Array.isArray(channels)
+          ? channels.find((channel: { type: string }) => channel.type === "instagram")
+          : null;
+        const instagramConfig = (instagram?.config || {}) as Record<string, string>;
+        merged.instagramVerifyToken = instagramConfig.verifyToken || "";
+        merged.instagramAccessToken = "";
+        merged.instagramBusinessAccountId = instagramConfig.businessAccountId || "";
+        merged.instagramGraphVersion =
+          instagramConfig.graphVersion || defaultSettings.instagramGraphVersion;
+        merged.instagramAppSecret = "";
+        merged.hasInstagramAccessToken = Boolean(instagramConfig.hasAccessToken);
+        merged.hasInstagramAppSecret = Boolean(instagramConfig.hasAppSecret);
         setData(merged);
       })
       .catch(() => addToast("error", "Lỗi khi tải cài đặt"))
@@ -913,6 +1131,72 @@ export default function SettingsPage() {
         return;
       }
 
+      if (activeTab === "facebook") {
+        const response = await fetch("/api/channels/facebook", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              verifyToken: data.facebookVerifyToken,
+              pageAccessToken: data.facebookPageAccessToken,
+              pageId: data.facebookPageId,
+              graphVersion: data.facebookGraphVersion,
+              appSecret: data.facebookAppSecret,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "Save failed");
+        }
+
+        addToast("success", "Đã lưu cấu hình Facebook");
+        setData((prev) => ({
+          ...prev,
+          facebookPageAccessToken: "",
+          facebookAppSecret: "",
+          hasFacebookPageAccessToken:
+            prev.hasFacebookPageAccessToken || data.facebookPageAccessToken.trim().length > 0,
+          hasFacebookAppSecret:
+            prev.hasFacebookAppSecret || data.facebookAppSecret.trim().length > 0,
+        }));
+        return;
+      }
+
+      if (activeTab === "instagram") {
+        const response = await fetch("/api/channels/instagram", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              verifyToken: data.instagramVerifyToken,
+              accessToken: data.instagramAccessToken,
+              businessAccountId: data.instagramBusinessAccountId,
+              graphVersion: data.instagramGraphVersion,
+              appSecret: data.instagramAppSecret,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "Save failed");
+        }
+
+        addToast("success", "Đã lưu cấu hình Instagram");
+        setData((prev) => ({
+          ...prev,
+          instagramAccessToken: "",
+          instagramAppSecret: "",
+          hasInstagramAccessToken:
+            prev.hasInstagramAccessToken || data.instagramAccessToken.trim().length > 0,
+          hasInstagramAppSecret:
+            prev.hasInstagramAppSecret || data.instagramAppSecret.trim().length > 0,
+        }));
+        return;
+      }
+
       const fields = sectionFields[activeTab];
       const payload: Record<string, unknown> = {};
       for (const f of fields) {
@@ -942,6 +1226,20 @@ export default function SettingsPage() {
     email: <EmailSection data={data} update={update} />,
     whatsapp: <WhatsAppSection data={data} update={update} />,
     zalo: <ZaloSection data={data} update={update} />,
+    facebook: (
+      <FacebookSection
+        data={data}
+        update={update}
+        callbackUrl={metaCallbackUrl}
+      />
+    ),
+    instagram: (
+      <InstagramSection
+        data={data}
+        update={update}
+        callbackUrl={metaCallbackUrl}
+      />
+    ),
   };
 
   if (loading) {
@@ -1004,6 +1302,10 @@ export default function SettingsPage() {
                   "Cấu hình tích hợp WhatsApp để hỗ trợ qua tin nhắn."}
                 {activeTab === "zalo" &&
                   "Dán cookies để chuẩn bị session và file cấu hình cho bot Zalo."}
+                {activeTab === "facebook" &&
+                  "Cấu hình Facebook Page Messenger để nhận và trả lời tin nhắn qua Meta."}
+                {activeTab === "instagram" &&
+                  "Cấu hình Instagram Direct Messaging API để nhận và trả lời tin nhắn."}
               </p>
             </div>
 

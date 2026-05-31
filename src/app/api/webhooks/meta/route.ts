@@ -6,10 +6,60 @@ import {
 } from "@/lib/channels/meta";
 import { handleExternalChannelMessage } from "@/lib/channels/external-message";
 import { logger } from "@/lib/logger";
+import { prisma } from "@/lib/prisma";
+
+function getConfigString(config: unknown, key: string): string {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) return "";
+  const value = (config as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function uniqueNonEmpty(values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]));
+}
+
+async function getMetaChannelConfigs() {
+  return prisma.channel.findMany({
+    where: { type: { in: ["facebook", "instagram"] } },
+    select: { config: true },
+    take: 2,
+  });
+}
+
+async function getVerifyTokens(): Promise<string[]> {
+  const tokens = [process.env.META_VERIFY_TOKEN];
+  const channels = await getMetaChannelConfigs();
+
+  for (const channel of Array.isArray(channels) ? channels : []) {
+    tokens.push(getConfigString(channel.config, "verifyToken"));
+  }
+
+  return uniqueNonEmpty(tokens);
+}
+
+async function getAppSecrets(): Promise<string[]> {
+  const secrets = [process.env.META_APP_SECRET];
+  const channels = await getMetaChannelConfigs();
+
+  for (const channel of Array.isArray(channels) ? channels : []) {
+    secrets.push(getConfigString(channel.config, "appSecret"));
+  }
+
+  return uniqueNonEmpty(secrets);
+}
+
+async function hasValidSignature(rawBody: string, signatureHeader: string | null) {
+  const appSecrets = await getAppSecrets();
+  if (appSecrets.length === 0) return true;
+
+  return appSecrets.some((appSecret) =>
+    verifyMetaSignature(rawBody, signatureHeader, appSecret)
+  );
+}
 
 export async function GET(request: NextRequest) {
-  const verifyToken = process.env.META_VERIFY_TOKEN;
-  if (!verifyToken) {
+  const verifyTokens = await getVerifyTokens();
+  if (verifyTokens.length === 0) {
     return NextResponse.json(
       { error: "META_VERIFY_TOKEN is not configured" },
       { status: 500 }
@@ -21,7 +71,7 @@ export async function GET(request: NextRequest) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  if (mode === "subscribe" && token === verifyToken && challenge) {
+  if (mode === "subscribe" && token && verifyTokens.includes(token) && challenge) {
     return new Response(challenge, {
       status: 200,
       headers: { "Content-Type": "text/plain" },
@@ -34,10 +84,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  const isValidSignature = verifyMetaSignature(
+  const isValidSignature = await hasValidSignature(
     rawBody,
-    request.headers.get("x-hub-signature-256"),
-    process.env.META_APP_SECRET
+    request.headers.get("x-hub-signature-256")
   );
 
   if (!isValidSignature) {
@@ -80,4 +129,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true, received: events.length });
 }
-
