@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import type { Prisma } from "@/generated/prisma/client";
+
+type MetadataRecord = Prisma.InputJsonObject;
 
 /**
  * Normalize a phone number for consistent matching.
@@ -11,6 +14,41 @@ export function normalizePhone(input: string): string {
 }
 
 const resolvingPromises = new Map<string, Promise<string>>();
+
+function isRecord(value: unknown): value is MetadataRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isExternalContactChannel(channel: string): channel is "facebook" | "instagram" {
+  return channel === "facebook" || channel === "instagram";
+}
+
+function getExternalContact(metadata: unknown, channel: string): string | null {
+  if (!isRecord(metadata)) return null;
+  const externalContacts = metadata.externalContacts;
+  if (!isRecord(externalContacts)) return null;
+  const contact = externalContacts[channel];
+  return typeof contact === "string" ? contact : null;
+}
+
+function mergeExternalContactMetadata(
+  metadata: unknown,
+  channel: string,
+  contact: string
+): MetadataRecord {
+  const base = isRecord(metadata) ? { ...metadata } : {};
+  const currentExternalContacts = isRecord(base.externalContacts)
+    ? base.externalContacts
+    : {};
+
+  return {
+    ...base,
+    externalContacts: {
+      ...currentExternalContacts,
+      [channel]: contact,
+    },
+  };
+}
 
 /**
  * Resolve a customer identity across channels.
@@ -108,6 +146,19 @@ async function findByChannelField(channel: string, contact: string) {
       return prisma.customer.findFirst({
         where: { phone: contact },
       });
+    case "facebook":
+    case "instagram": {
+      const candidates = await prisma.customer.findMany({
+        select: { id: true, metadata: true },
+        take: 1000,
+      });
+      return (
+        candidates.find(
+          (customer: { metadata: unknown }) =>
+            getExternalContact(customer.metadata, channel) === contact
+        ) || null
+      );
+    }
     default:
       return null;
   }
@@ -127,6 +178,9 @@ async function createCustomer(
       ...(channel === "whatsapp" ? { whatsapp: contact } : {}),
       ...(channel === "phone" ? { phone: contact } : {}),
       ...(channel === "zalo" ? { phone: contact } : {}),
+      ...(isExternalContactChannel(channel)
+        ? { metadata: mergeExternalContactMetadata({}, channel, contact) }
+        : {}),
     },
   });
 
@@ -151,7 +205,7 @@ async function updateExistingCustomer(
   // Backfill empty channel fields
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
-    select: { name: true, email: true, phone: true, whatsapp: true },
+    select: { name: true, email: true, phone: true, whatsapp: true, metadata: true },
   });
 
   if (!customer) return;
@@ -160,6 +214,9 @@ async function updateExistingCustomer(
   if (channel === "whatsapp" && !customer.whatsapp) update.whatsapp = contact;
   if (channel === "phone" && !customer.phone) update.phone = contact;
   if (channel === "zalo" && !customer.phone) update.phone = contact;
+  if (isExternalContactChannel(channel)) {
+    update.metadata = mergeExternalContactMetadata(customer.metadata, channel, contact);
+  }
 
   // Update name if current is "Unknown" and we have a better one
   if (customer.name === "Unknown" && name && name !== "Unknown") {
