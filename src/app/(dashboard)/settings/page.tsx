@@ -866,7 +866,7 @@ function FacebookSection({
           placeholder="Nhập Page access token"
         />
       </FormField>
-      <FormField label="Page ID" description="ID Facebook Page, dùng để ghi chú và kiểm tra cấu hình.">
+      <FormField label="Page ID" description="ID Facebook Page, tùy chọn. Dùng để ghi chú hoặc kiểm tra cấu hình, không bắt buộc nếu đã có Page Access Token.">
         <TextInput
           value={data.facebookPageId}
           onChange={(v) => update("facebookPageId", v)}
