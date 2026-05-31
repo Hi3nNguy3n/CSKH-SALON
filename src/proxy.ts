@@ -79,7 +79,16 @@ export function proxy(request: NextRequest) {
   }
 
   // Public paths that don't require auth
-  const publicPaths = ["/login", "/setup", "/api/auth", "/api/health", "/api/openapi.json"];
+  const publicPaths = [
+    "/login",
+    "/setup",
+    "/privacy",
+    "/terms",
+    "/data-deletion",
+    "/api/auth",
+    "/api/health",
+    "/api/openapi.json",
+  ];
   const isPublic = publicPaths.some((p) => pathname.startsWith(p));
 
   // Channel webhook endpoints (authenticated via provider signatures, not JWT)

@@ -83,6 +83,16 @@ npm run dev
 Truy cập `http://localhost:3000` để bắt đầu quản trị hệ thống. 
 *Tài khoản mặc định thường là `admin` / `admin123` (Cấu hình trong seed).*
 
+### Meta App Legal URLs
+
+Khi cấu hình Meta Developer App cho Facebook Messenger hoặc Instagram Messaging, dùng các URL sau với domain public của ứng dụng:
+
+```txt
+Privacy Policy URL: <APP_URL>/privacy
+Terms of Service URL: <APP_URL>/terms
+Data Deletion URL: <APP_URL>/data-deletion
+```
+
 ---
 
 ## 🧠 Logic Phản Hồi Của AI (System Prompt Logic)
