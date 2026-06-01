@@ -237,24 +237,52 @@ function tableRowsToKnowledgeSections(
   const headingRows: string[][] = [];
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const row = rows[rowIndex];
-    if (!row.some(isPriceLine)) {
+    let row = rows[rowIndex];
+    let priceCells = getPriceCells(row);
+    let mergedPriceOnlyRow = false;
+
+    if (priceCells.length === 0 && rowIndex < rows.length - 1) {
+      const nextRow = rows[rowIndex + 1];
+      const nextPriceCells = getPriceCells(nextRow);
+      if (nextPriceCells.length > 0 && nextPriceCells.length === nextRow.length) {
+        row = [...row, ...nextRow];
+        mergedPriceOnlyRow = true;
+        priceCells = row
+          .map((cell, cellIndex) => ({ cell, cellIndex }))
+          .filter(({ cell }) => isPriceLine(cell));
+        rowIndex += 1;
+      }
+    }
+
+    if (priceCells.length === 0) {
       headingRows.push(row);
       continue;
     }
 
     const descriptorCells = row.filter((cell) => !isPriceLine(cell));
-    const priceCells = row
-      .map((cell, cellIndex) => ({ cell, cellIndex }))
-      .filter(({ cell }) => isPriceLine(cell));
+    if (descriptorCells.length === 0) {
+      continue;
+    }
+
     const tableContext = flattenTableContext(headingRows);
     const title = pickTableRowTitle(descriptorCells, tableContext, options.baseTitle);
-    const priceLines = priceCells.map(({ cell, cellIndex }) => {
-      const label = findPriceColumnLabel(headingRows, cellIndex);
+    const inlinePriceLabels = findInlinePriceLabels(descriptorCells, priceCells.length);
+    const priceLines = priceCells.map(({ cell, cellIndex }, priceIndex) => {
+      const label =
+        inlinePriceLabels[priceIndex] ||
+        (mergedPriceOnlyRow
+          ? ""
+          : findPriceColumnLabel(headingRows, {
+              cellIndex,
+              priceIndex,
+              priceCount: priceCells.length,
+              descriptorCount: descriptorCells.length,
+            }));
       return label ? `Giá ${label}: ${cell}` : `Giá: ${cell}`;
     });
-    const contentLines = [...tableContext.slice(0, 8), ...descriptorCells, ...priceLines].filter(
-      (line) => !isCatalogueNoise(line)
+    const contextLines = tableContext.slice(0, 8).filter((line) => !descriptorCells.includes(line));
+    const contentLines = [...contextLines, ...descriptorCells, ...priceLines].filter(
+      (line, index, allLines) => !isCatalogueNoise(line) && allLines.indexOf(line) === index
     );
 
     sections.push({
@@ -275,6 +303,12 @@ function tableRowsToKnowledgeSections(
   return sections;
 }
 
+function getPriceCells(row: string[]): Array<{ cell: string; cellIndex: number }> {
+  return row
+    .map((cell, cellIndex) => ({ cell, cellIndex }))
+    .filter(({ cell }) => isPriceLine(cell));
+}
+
 function flattenTableContext(rows: string[][]): string[] {
   return rows.flatMap((row) => row.flatMap((cell) => splitCellLines(cell))).filter(Boolean);
 }
@@ -291,31 +325,103 @@ function pickTableRowTitle(
   tableContext: string[],
   fallbackTitle: string
 ): string {
-  const candidates = [...descriptorCells, ...tableContext]
-    .flatMap(splitCellLines)
-    .filter((line) => !isCatalogueHeaderOnly(line) && !isCatalogueDescriptionLine(line));
-  const pipeCandidate = candidates.find((line) => line.includes("|"));
+  const descriptorCandidates = descriptorCells
+    .flatMap(splitTitleLines)
+    .filter(isServiceTitleCandidate);
+  const contextCandidates = tableContext.filter(isServiceTitleCandidate);
+
+  const pipeCandidate = descriptorCandidates.find((line) => line.includes("|"));
   if (pipeCandidate) return pipeCandidate.split("|")[0].trim().slice(0, 120);
 
-  const uppercaseCandidate = candidates.find((line) => isMostlyUppercaseHeading(line));
-  if (uppercaseCandidate) return uppercaseCandidate.slice(0, 120);
+  const vietnameseDescriptor = descriptorCandidates.find((line) => !looksMostlyEnglish(line));
+  if (vietnameseDescriptor) return vietnameseDescriptor.slice(0, 120);
 
-  return (
-    candidates.find((line) => !looksMostlyEnglish(line)) ||
-    candidates[0] ||
-    fallbackTitle
-  ).slice(0, 120);
+  if (descriptorCandidates[0]) return descriptorCandidates[0].slice(0, 120);
+
+  const contextPipeCandidate = contextCandidates.find((line) => line.includes("|"));
+  if (contextPipeCandidate) return contextPipeCandidate.split("|")[0].trim().slice(0, 120);
+
+  const contextCandidate = contextCandidates.find((line) => !looksMostlyEnglish(line));
+  if (contextCandidate) return contextCandidate.slice(0, 120);
+
+  return (contextCandidates[0] || fallbackTitle).slice(0, 120);
 }
 
-function findPriceColumnLabel(headingRows: string[][], cellIndex: number): string {
+function splitTitleLines(cell: string): string[] {
+  return cell
+    .split(/\n+/)
+    .map((line) => normalizeText(line))
+    .filter(Boolean);
+}
+
+function isServiceTitleCandidate(line: string): boolean {
+  return (
+    Boolean(line) &&
+    !isPriceLine(line) &&
+    !isCatalogueHeaderOnly(line) &&
+    !isCatalogueDescriptionLine(line) &&
+    !/^(CUTTING|PERM|STRAIHTEN|STRAIGHTEN|HAIR COLORING|BLEACHING|Treatment system)$/i.test(line)
+  );
+}
+
+function findInlinePriceLabels(descriptorCells: string[], priceCount: number): string[] {
+  if (priceCount <= 0) return [];
+
+  const lines = descriptorCells.flatMap(splitCellLines);
+  if (lines.length === priceCount && lines.every(isCompactServicePriceLabel)) {
+    return lines;
+  }
+
+  const tail = lines.slice(-priceCount);
+  if (tail.length !== priceCount || !tail.every(isInlinePriceLabelCandidate)) {
+    return [];
+  }
+
+  return tail;
+}
+
+function isCompactServicePriceLabel(line: string): boolean {
+  return (
+    line.length <= 60 &&
+    !isCatalogueDescriptionLine(line) &&
+    !looksMostlyEnglish(line) &&
+    !/[.!?]$/.test(line)
+  );
+}
+
+function isInlinePriceLabelCandidate(line: string): boolean {
+  return /^(?:\d+\s*[-–]?\s*\d*\s*(?:cm|sợi|tep|tép)|[SMLX]{1,2}|size\s+[SMLX]{1,2}|trẻ em|người lớn)$/i.test(
+    line.trim()
+  );
+}
+
+function findPriceColumnLabel(
+  headingRows: string[][],
+  options: { cellIndex: number; priceIndex: number; priceCount: number; descriptorCount: number }
+): string {
   for (let rowIndex = headingRows.length - 1; rowIndex >= 0; rowIndex -= 1) {
-    const label = headingRows[rowIndex][cellIndex];
-    if (label && !isPriceLine(label)) {
+    const headingRow = headingRows[rowIndex];
+    const label =
+      headingRow.length === options.priceCount
+        ? headingRow[options.priceIndex]
+        : headingRow.length === options.priceCount + options.descriptorCount
+          ? headingRow[options.cellIndex]
+          : headingRow[options.cellIndex] || headingRow[options.priceIndex];
+    if (label && !isPriceLine(label) && isPriceColumnLabelCandidate(label)) {
       return splitCellLines(label).join(" ");
     }
   }
 
   return "";
+}
+
+function isPriceColumnLabelCandidate(label: string): boolean {
+  const normalized = normalizeText(label);
+  return (
+    normalized.length <= 80 &&
+    !/khách vui lòng|liên hệ|báo giá|tham khảo/i.test(normalized) &&
+    !isCatalogueDescriptionLine(normalized)
+  );
 }
 
 function htmlToText(html: string): string {
@@ -762,11 +868,16 @@ function splitPriceCatalogueSections(
 function isPriceLine(line: string): boolean {
   const priceToken =
     "(?:\\+?\\s*)?(?:\\d{1,3}(?:[.,]\\d{3})+\\s*(?:đ|d|vnd)?|\\d+(?:[.,]\\d+)?\\s*(?:k|đ|d|vnd|tr|triệu|million|m))";
+  const normalized = line
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/đồng/gi, "đ")
+    .replace(/\s*\/\s*(?:lần|lan|chùm|chum|tép|tep)$/gi, "");
 
   return new RegExp(
     `^(?:từ|from)?\\s*${priceToken}(?:\\s*[-–]\\s*${priceToken})?(?:\\s*\\+)?$`,
     "iu"
-  ).test(line.trim().replace(/\s+/g, " ").replace(/đồng/gi, "đ"));
+  ).test(normalized);
 }
 
 function collectDescriptorLines(lines: string[], priceIndex: number): string[] {

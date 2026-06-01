@@ -22,6 +22,7 @@ import {
   ArrowLeft,
   Upload,
   CheckCircle,
+  Sparkles,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -64,6 +65,32 @@ interface ImportResult {
   embeddingSkipped: number;
   warnings: string[];
 }
+
+interface ImportPreviewSection {
+  index: number;
+  title: string;
+  content: string;
+  contentPreview: string;
+  contentLength: number;
+  sourceFormat: string | null;
+  parserConfidence: number | null;
+  metadata: Record<string, unknown>;
+  selected: boolean;
+}
+
+interface ImportPreview {
+  success: boolean;
+  filename: string;
+  sourceType: string;
+  chunkCount: number;
+  previewCount: number;
+  lowConfidenceCount: number;
+  averageConfidence: number | null;
+  warnings: string[];
+  sections: ImportPreviewSection[];
+}
+
+type ImportMode = "parser" | "gemini";
 
 const PRIORITIES = [
   { value: 0, label: "Thường", icon: Minus, className: "bg-gray-100 text-gray-600" },
@@ -111,9 +138,15 @@ export default function KnowledgeBasePage() {
 
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importForm, setImportForm] = useState({ priority: 0, isActive: true });
+  const [importForm, setImportForm] = useState<{
+    priority: number;
+    isActive: boolean;
+    mode: ImportMode;
+  }>({ priority: 0, isActive: true, mode: "parser" });
+  const [previewingImport, setPreviewingImport] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
   const [deleteTarget, setDeleteTarget] = useState<{
@@ -210,8 +243,11 @@ export default function KnowledgeBasePage() {
         body: JSON.stringify(categoryForm),
       });
       if (res.ok) {
+        const savedCategory = (await res.json()) as CategoryWithCount;
         setShowCategoryModal(false);
         await fetchCategories();
+        setSelectedCategoryId(savedCategory.id);
+        setMobileShowDetail(true);
       }
     } catch (err) {
       console.error("Failed to save category:", err);
@@ -233,8 +269,9 @@ export default function KnowledgeBasePage() {
 
   function openImportModal() {
     setImportFile(null);
-    setImportForm({ priority: 0, isActive: true });
+    setImportForm({ priority: 0, isActive: true, mode: "parser" });
     setImportError("");
+    setImportPreview(null);
     setImportResult(null);
     setShowImportModal(true);
   }
@@ -264,22 +301,87 @@ export default function KnowledgeBasePage() {
     }
   }
 
-  async function submitImport() {
+  async function previewImport() {
     if (!selectedCategoryId || !importFile) return;
-    setImporting(true);
+    setPreviewingImport(true);
     setImportError("");
+    setImportPreview(null);
     setImportResult(null);
 
     try {
       const formData = new FormData();
       formData.append("file", importFile);
-      formData.append("categoryId", selectedCategoryId);
-      formData.append("priority", String(importForm.priority));
-      formData.append("isActive", String(importForm.isActive));
+      formData.append("mode", importForm.mode);
 
-      const res = await fetch("/api/knowledge/import", {
+      const res = await fetch("/api/knowledge/import/preview", {
         method: "POST",
         body: formData,
+      });
+      const data = await res.json().catch(() => ({
+        error: `Không đọc được response từ server. HTTP ${res.status}`,
+      }));
+
+      if (!res.ok) {
+        console.error("Knowledge import preview failed:", {
+          status: res.status,
+          mode: importForm.mode,
+          filename: importFile.name,
+          response: data,
+        });
+        setImportError(
+          data.error
+            ? `HTTP ${res.status}: ${data.error}`
+            : `HTTP ${res.status}: Không thể xem trước file.`
+        );
+        return;
+      }
+
+      setImportPreview({
+        ...data,
+        sections: data.sections.map((section: ImportPreviewSection) => ({
+          ...section,
+          selected: true,
+        })),
+      });
+    } catch (err) {
+      console.error("Failed to preview knowledge file:", err);
+      setImportError("Không thể xem trước file. Vui lòng thử lại.");
+    } finally {
+      setPreviewingImport(false);
+    }
+  }
+
+  async function submitImport() {
+    if (!selectedCategoryId || !importPreview) return;
+    const reviewedSections = importPreview.sections
+      .filter((section) => section.selected && section.title.trim() && section.content.trim())
+      .map((section) => ({
+        title: section.title.trim(),
+        content: section.content.trim(),
+        metadata: section.metadata,
+      }));
+
+    if (reviewedSections.length === 0) {
+      setImportError("Chọn ít nhất một mục có tiêu đề và nội dung để import.");
+      return;
+    }
+
+    setImporting(true);
+    setImportError("");
+    setImportResult(null);
+
+    try {
+      const res = await fetch("/api/knowledge/import/reviewed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categoryId: selectedCategoryId,
+          filename: importPreview.filename,
+          sourceType: importPreview.sourceType,
+          priority: importForm.priority,
+          isActive: importForm.isActive,
+          sections: reviewedSections,
+        }),
       });
       const data = await res.json();
 
@@ -297,6 +399,51 @@ export default function KnowledgeBasePage() {
     } finally {
       setImporting(false);
     }
+  }
+
+  function updatePreviewSection(
+    index: number,
+    patch: Partial<Pick<ImportPreviewSection, "title" | "content" | "selected">>
+  ) {
+    setImportPreview((preview) =>
+      preview
+        ? {
+            ...preview,
+            sections: preview.sections.map((section) =>
+              section.index === index
+                ? {
+                    ...section,
+                    ...patch,
+                    contentLength:
+                      patch.content !== undefined ? patch.content.length : section.contentLength,
+                  }
+                : section
+            ),
+          }
+        : preview
+    );
+  }
+
+  function removePreviewSection(index: number) {
+    setImportPreview((preview) =>
+      preview
+        ? {
+            ...preview,
+            sections: preview.sections.filter((section) => section.index !== index),
+          }
+        : preview
+    );
+  }
+
+  function setAllPreviewSectionsSelected(selected: boolean) {
+    setImportPreview((preview) =>
+      preview
+        ? {
+            ...preview,
+            sections: preview.sections.map((section) => ({ ...section, selected })),
+          }
+        : preview
+    );
   }
 
   async function toggleEntryActive(entry: KnowledgeEntry) {
@@ -355,6 +502,10 @@ export default function KnowledgeBasePage() {
     "#7C6B9B",
     "#4A9B7C",
   ];
+  const selectedPreviewCount =
+    importPreview?.sections.filter(
+      (section) => section.selected && section.title.trim() && section.content.trim()
+    ).length || 0;
 
   return (
     <>
@@ -749,36 +900,101 @@ export default function KnowledgeBasePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => !importing && setShowImportModal(false)}
+            onClick={() => !importing && !previewingImport && setShowImportModal(false)}
           />
-          <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-lg mx-4">
+          <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-owly-border">
               <h3 className="font-semibold text-owly-text">Nhập kiến thức từ file</h3>
               <button
                 onClick={() => setShowImportModal(false)}
-                disabled={importing}
+                disabled={importing || previewingImport}
                 className="p-1 text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto">
               <div>
                 <label className="block text-xs font-medium text-owly-text mb-1.5">File</label>
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md"
+                  accept={
+                    importForm.mode === "gemini"
+                      ? ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg,.webp,.heic,.heif"
+                      : ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md"
+                  }
                   onChange={(event) => {
                     setImportFile(event.target.files?.[0] || null);
                     setImportError("");
+                    setImportPreview(null);
                     setImportResult(null);
                   }}
                   className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary"
                 />
                 <p className="text-xs text-owly-text-light mt-1">
-                  Hỗ trợ PDF, Word, Excel, CSV, TXT và MD. Tối đa 10MB.
+                  Hỗ trợ PDF, Word, Excel, CSV, TXT, MD và ảnh khi dùng Gemini. Tối đa 10MB.
                 </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-owly-text mb-1.5">
+                  Cách đọc file
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportForm({ ...importForm, mode: "parser" });
+                      setImportError("");
+                      setImportPreview(null);
+                      setImportResult(null);
+                    }}
+                    className={cn(
+                      "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                      importForm.mode === "parser"
+                        ? "border-owly-primary bg-owly-primary-50 text-owly-primary"
+                        : "border-owly-border text-owly-text hover:border-owly-primary/30"
+                    )}
+                  >
+                    <FileText className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <span>
+                      <span className="block text-sm font-medium">Parser thường</span>
+                      <span className="block text-xs text-owly-text-light">
+                        Nhanh, không tốn AI, hợp file có cấu trúc text rõ.
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImportForm({ ...importForm, mode: "gemini" });
+                      setImportError("");
+                      setImportPreview(null);
+                      setImportResult(null);
+                    }}
+                    className={cn(
+                      "flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors",
+                      importForm.mode === "gemini"
+                        ? "border-owly-primary bg-owly-primary-50 text-owly-primary"
+                        : "border-owly-border text-owly-text hover:border-owly-primary/30"
+                    )}
+                  >
+                    <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                    <span>
+                      <span className="block text-sm font-medium">Đọc bằng Gemini</span>
+                      <span className="block text-xs text-owly-text-light">
+                        Tốt hơn cho PDF, ảnh chụp, bảng giá nhiều cột và layout khó.
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                {importForm.mode === "gemini" && (
+                  <p className="mt-2 text-xs text-owly-text-light">
+                    Với file Word nhiều bảng/ảnh như bảng giá salon, nên lưu thành PDF rồi import
+                    bằng Gemini để giữ bố cục chính xác hơn.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -827,6 +1043,140 @@ export default function KnowledgeBasePage() {
                 </div>
               )}
 
+              {importPreview && (
+                <div className="space-y-3 border border-owly-border rounded-lg p-3 bg-owly-bg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2 text-sm font-semibold text-owly-text">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        Xem trước {importPreview.filename}
+                      </div>
+                      <p className="text-xs text-owly-text-light mt-1">
+                        Tách được {importPreview.chunkCount} mục. Đã chọn {selectedPreviewCount} mục
+                        để import vào {selectedCategory?.name || "danh mục hiện tại"}.
+                      </p>
+                      <p className="text-xs text-owly-text-light mt-0.5">
+                        Nguồn đọc: {importPreview.sourceType}
+                      </p>
+                    </div>
+                    <div
+                      className={cn(
+                        "px-2 py-1 rounded-md text-xs font-medium",
+                        importPreview.lowConfidenceCount > 0
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-700"
+                      )}
+                    >
+                      {importPreview.averageConfidence === null
+                        ? "Chưa có confidence"
+                        : `${Math.round(importPreview.averageConfidence * 100)}% confidence`}
+                    </div>
+                  </div>
+
+                  {importPreview.warnings.length > 0 && (
+                    <div className="flex items-start gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
+                      <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                      <div className="space-y-1">
+                        {importPreview.warnings.map((warning, index) => (
+                          <p key={`${warning}-${index}`}>{warning}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => setAllPreviewSectionsSelected(true)}
+                      className="text-xs font-medium text-owly-primary hover:text-owly-primary-dark"
+                    >
+                      Chọn tất cả
+                    </button>
+                    <button
+                      onClick={() => setAllPreviewSectionsSelected(false)}
+                      className="text-xs font-medium text-owly-text-light hover:text-owly-text"
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  </div>
+
+                  <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                    {importPreview.sections.map((section) => (
+                      <div
+                        key={`preview-section-${section.index}`}
+                        className="border border-owly-border bg-owly-surface rounded-lg p-3"
+                      >
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={section.selected}
+                            onChange={(event) =>
+                              updatePreviewSection(section.index, {
+                                selected: event.target.checked,
+                              })
+                            }
+                            className="mt-2 h-4 w-4 rounded border-owly-border text-owly-primary focus:ring-owly-primary/30"
+                            aria-label={`Chọn mục ${section.index + 1}`}
+                          />
+                          <div className="min-w-0 flex-1 space-y-2">
+                            <input
+                              type="text"
+                              value={section.title}
+                              onChange={(event) =>
+                                updatePreviewSection(section.index, { title: event.target.value })
+                              }
+                              className="w-full px-2.5 py-1.5 text-sm font-medium text-owly-text border border-owly-border rounded-lg focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary"
+                            />
+                            <div className="mt-1 flex items-center gap-2 flex-wrap text-[11px] text-owly-text-light">
+                              <span>#{section.index + 1}</span>
+                              {section.sourceFormat && (
+                                <span className="px-1.5 py-0.5 rounded bg-gray-100">
+                                  {section.sourceFormat}
+                                </span>
+                              )}
+                              <span>{section.contentLength} ký tự</span>
+                              {section.parserConfidence !== null && (
+                                <span
+                                  className={cn(
+                                    "px-1.5 py-0.5 rounded",
+                                    section.parserConfidence < 0.75
+                                      ? "bg-yellow-100 text-yellow-800"
+                                      : "bg-green-100 text-green-700"
+                                  )}
+                                >
+                                  {Math.round(section.parserConfidence * 100)}%
+                                </span>
+                              )}
+                              {section.metadata.requiresReview === true && (
+                                <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700">
+                                  {typeof section.metadata.reviewLabel === "string"
+                                    ? section.metadata.reviewLabel
+                                    : "Cần kiểm tra"}
+                                </span>
+                              )}
+                            </div>
+                            <textarea
+                              value={section.content}
+                              onChange={(event) =>
+                                updatePreviewSection(section.index, { content: event.target.value })
+                              }
+                              rows={5}
+                              className="w-full px-2.5 py-2 text-xs leading-relaxed text-owly-text border border-owly-border rounded-lg focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary resize-y"
+                            />
+                          </div>
+                          <button
+                            onClick={() => removePreviewSection(section.index)}
+                            className="p-1.5 text-owly-text-light hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Bỏ mục này"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {importResult && (
                 <div className="space-y-2 px-3 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
                   <div className="flex items-center gap-2 font-medium">
@@ -851,14 +1201,28 @@ export default function KnowledgeBasePage() {
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-owly-border">
               <button
                 onClick={() => setShowImportModal(false)}
-                disabled={importing}
+                disabled={importing || previewingImport}
                 className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded-lg transition-colors"
               >
                 Đóng
               </button>
               <button
+                onClick={previewImport}
+                disabled={!importFile || !selectedCategoryId || importing || previewingImport}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-owly-primary border border-owly-primary/30 hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                {previewingImport ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
+                Xem trước
+              </button>
+              <button
                 onClick={submitImport}
-                disabled={!importFile || !selectedCategoryId || importing}
+                disabled={
+                  !selectedCategoryId || !importPreview || selectedPreviewCount === 0 || importing
+                }
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary hover:bg-owly-primary-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
                 {importing ? (
@@ -866,7 +1230,7 @@ export default function KnowledgeBasePage() {
                 ) : (
                   <Upload className="h-3.5 w-3.5" />
                 )}
-                Nhập file
+                Xác nhận nhập {selectedPreviewCount > 0 ? `(${selectedPreviewCount})` : ""}
               </button>
             </div>
           </div>
