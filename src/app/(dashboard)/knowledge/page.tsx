@@ -276,6 +276,14 @@ export default function KnowledgeBasePage() {
     setShowImportModal(true);
   }
 
+  function closeImportModal() {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportError("");
+    setImportPreview(null);
+    setImportResult(null);
+  }
+
   async function saveEntry() {
     if (!entryForm.title.trim() || !selectedCategoryId) return;
     setSavingEntry(true);
@@ -393,6 +401,7 @@ export default function KnowledgeBasePage() {
       setImportResult(data);
       await fetchEntries(selectedCategoryId);
       await fetchCategories();
+      closeImportModal();
     } catch (err) {
       console.error("Failed to import knowledge file:", err);
       setImportError("Không thể import file. Vui lòng thử lại.");
@@ -900,13 +909,13 @@ export default function KnowledgeBasePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/40"
-            onClick={() => !importing && !previewingImport && setShowImportModal(false)}
+            onClick={() => !importing && !previewingImport && closeImportModal()}
           />
           <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-owly-border">
               <h3 className="font-semibold text-owly-text">Nhập kiến thức từ file</h3>
               <button
-                onClick={() => setShowImportModal(false)}
+                onClick={closeImportModal}
                 disabled={importing || previewingImport}
                 className="p-1 text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded transition-colors"
               >
@@ -918,6 +927,7 @@ export default function KnowledgeBasePage() {
               <div>
                 <label className="block text-xs font-medium text-owly-text mb-1.5">File</label>
                 <input
+                  key={importForm.mode}
                   type="file"
                   accept={
                     importForm.mode === "gemini"
@@ -946,6 +956,7 @@ export default function KnowledgeBasePage() {
                     type="button"
                     onClick={() => {
                       setImportForm({ ...importForm, mode: "parser" });
+                      setImportFile(null);
                       setImportError("");
                       setImportPreview(null);
                       setImportResult(null);
@@ -969,6 +980,7 @@ export default function KnowledgeBasePage() {
                     type="button"
                     onClick={() => {
                       setImportForm({ ...importForm, mode: "gemini" });
+                      setImportFile(null);
                       setImportError("");
                       setImportPreview(null);
                       setImportResult(null);
@@ -1200,7 +1212,7 @@ export default function KnowledgeBasePage() {
 
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-owly-border">
               <button
-                onClick={() => setShowImportModal(false)}
+                onClick={closeImportModal}
                 disabled={importing || previewingImport}
                 className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded-lg transition-colors"
               >
@@ -1221,7 +1233,11 @@ export default function KnowledgeBasePage() {
               <button
                 onClick={submitImport}
                 disabled={
-                  !selectedCategoryId || !importPreview || selectedPreviewCount === 0 || importing
+                  !selectedCategoryId ||
+                  !importPreview ||
+                  selectedPreviewCount === 0 ||
+                  importing ||
+                  previewingImport
                 }
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary hover:bg-owly-primary-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
               >
