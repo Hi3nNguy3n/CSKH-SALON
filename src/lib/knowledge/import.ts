@@ -3,7 +3,9 @@ import { PDFParse } from "pdf-parse";
 import WordExtractor from "word-extractor";
 import * as XLSX from "xlsx";
 
-const MAX_ENTRY_CONTENT_LENGTH = 5000;
+export const DEFAULT_KNOWLEDGE_CHUNK_MAX_CHARS = 1400;
+export const DEFAULT_KNOWLEDGE_CHUNK_OVERLAP_CHARS = 160;
+
 const MAX_IMPORTED_SECTIONS = 50;
 
 export const SUPPORTED_KNOWLEDGE_FILE_EXTENSIONS = [
@@ -29,6 +31,11 @@ export interface ImportedKnowledgeDocument {
   detectedType: string;
 }
 
+interface ChunkOptions {
+  maxChars?: number;
+  overlapChars?: number;
+}
+
 export function isSupportedKnowledgeFile(fileName: string): boolean {
   const extension = getFileExtension(fileName);
   return SUPPORTED_KNOWLEDGE_FILE_EXTENSIONS.includes(
@@ -51,34 +58,18 @@ export async function importKnowledgeDocument(
 
   switch (extension) {
     case "pdf":
-      return importTextLikeDocument(
-        fileName,
-        "pdf",
-        await extractPdfText(buffer)
-      );
+      return importTextLikeDocument(fileName, "pdf", await extractPdfText(buffer));
     case "doc":
-      return importTextLikeDocument(
-        fileName,
-        "doc",
-        await extractDocText(buffer)
-      );
+      return importTextLikeDocument(fileName, "doc", await extractDocText(buffer));
     case "docx":
-      return importTextLikeDocument(
-        fileName,
-        "docx",
-        await extractDocxText(buffer)
-      );
+      return importTextLikeDocument(fileName, "docx", await extractDocxText(buffer));
     case "xls":
     case "xlsx":
     case "csv":
-      return importWorkbookDocument(fileName, mimeType, buffer);
+      return importWorkbookDocument(fileName, extension, mimeType, buffer);
     case "txt":
     case "md":
-      return importTextLikeDocument(
-        fileName,
-        extension,
-        buffer.toString("utf8")
-      );
+      return importTextLikeDocument(fileName, extension, buffer.toString("utf8"));
     default:
       throw new Error(`Unsupported file extension: ${extension}`);
   }
@@ -91,7 +82,12 @@ function getFileExtension(fileName: string): string {
 }
 
 function getBaseTitle(fileName: string): string {
-  return fileName.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "Imported knowledge";
+  return (
+    fileName
+      .replace(/\.[^.]+$/, "")
+      .replace(/[_-]+/g, " ")
+      .trim() || "Imported knowledge"
+  );
 }
 
 function normalizeText(text: string): string {
@@ -112,6 +108,12 @@ function importTextLikeDocument(
 ): ImportedKnowledgeDocument {
   const normalized = normalizeText(text);
   if (!normalized) {
+    if (detectedType === "pdf") {
+      throw new Error(
+        "File PDF có thể là bản scan hoặc không có text đọc được. OCR chưa được hỗ trợ trong phase này."
+      );
+    }
+
     throw new Error("The uploaded file does not contain extractable text.");
   }
 
@@ -130,6 +132,7 @@ function importTextLikeDocument(
 
 function importWorkbookDocument(
   fileName: string,
+  extension: string,
   mimeType: string,
   buffer: Buffer
 ): ImportedKnowledgeDocument {
@@ -167,14 +170,14 @@ function importWorkbookDocument(
 
     if (lineItems.length === 0) continue;
 
-    const chunks = chunkStringList(lineItems, MAX_ENTRY_CONTENT_LENGTH);
+    const chunks = chunkStringList(lineItems, DEFAULT_KNOWLEDGE_CHUNK_MAX_CHARS);
     chunks.forEach((chunk, index) => {
       sections.push({
         title:
           chunks.length === 1
             ? `${baseTitle} - ${sheetName}`
             : `${baseTitle} - ${sheetName} - Phần ${index + 1}`,
-        content: chunk.join("\n"),
+        content: normalizeText([`Sheet: ${sheetName}`, ...chunk].join("\n")),
         metadata: {
           sourceType: "spreadsheet",
           sheetName,
@@ -200,7 +203,7 @@ function importWorkbookDocument(
   return {
     sections: limitedSections,
     warnings,
-    detectedType: mimeType === "text/csv" ? "csv" : "spreadsheet",
+    detectedType: extension,
   };
 }
 
@@ -255,7 +258,13 @@ function chunkStringList(items: string[], maxLength: number): string[][] {
   return chunks;
 }
 
-function splitTextIntoSections(baseTitle: string, text: string): ImportedKnowledgeSection[] {
+export function splitTextIntoSections(
+  baseTitle: string,
+  text: string,
+  options: ChunkOptions = {}
+): ImportedKnowledgeSection[] {
+  const maxChars = options.maxChars ?? DEFAULT_KNOWLEDGE_CHUNK_MAX_CHARS;
+  const overlapChars = options.overlapChars ?? DEFAULT_KNOWLEDGE_CHUNK_OVERLAP_CHARS;
   const paragraphs = text
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
@@ -269,8 +278,16 @@ function splitTextIntoSections(baseTitle: string, text: string): ImportedKnowled
   let currentTitle = baseTitle;
   let currentParagraphs: string[] = [];
   let partNumber = 1;
+  let overlapText = "";
+  let hasNewContent = false;
 
-  const flush = () => {
+  const flush = (preserveOverlap = true) => {
+    if (!hasNewContent) {
+      currentParagraphs = [];
+      overlapText = "";
+      return;
+    }
+
     const content = normalizeText(currentParagraphs.join("\n\n"));
     if (!content) return;
 
@@ -280,28 +297,42 @@ function splitTextIntoSections(baseTitle: string, text: string): ImportedKnowled
         : currentTitle;
 
     sections.push({ title: sectionTitle, content });
-    currentParagraphs = [];
+    overlapText = preserveOverlap ? getOverlapText(content, overlapChars) : "";
+    currentParagraphs = overlapText ? [overlapText] : [];
+    hasNewContent = false;
     currentTitle = `${baseTitle} - Phần ${partNumber + 1}`;
     partNumber += 1;
   };
 
   for (let index = 0; index < paragraphs.length; index += 1) {
     const paragraph = paragraphs[index];
+    const paragraphChunks =
+      paragraph.length > maxChars
+        ? splitLongParagraph(paragraph, maxChars, overlapChars)
+        : [paragraph];
 
-    if (looksLikeHeading(paragraph) && index < paragraphs.length - 1) {
+    if (
+      paragraphChunks.length === 1 &&
+      looksLikeHeading(paragraph) &&
+      index < paragraphs.length - 1
+    ) {
       if (currentParagraphs.length > 0) {
-        flush();
+        flush(false);
       }
       currentTitle = sanitizeHeading(paragraph, baseTitle, partNumber);
       continue;
     }
 
-    const projectedLength = currentParagraphs.join("\n\n").length + paragraph.length + 2;
-    if (currentParagraphs.length > 0 && projectedLength > MAX_ENTRY_CONTENT_LENGTH) {
-      flush();
-    }
+    for (const paragraphChunk of paragraphChunks) {
+      const currentLength = currentParagraphs.join("\n\n").length;
+      const projectedLength = currentLength + paragraphChunk.length + (currentLength > 0 ? 2 : 0);
+      if (currentParagraphs.length > 0 && projectedLength > maxChars) {
+        flush();
+      }
 
-    currentParagraphs.push(paragraph);
+      currentParagraphs.push(paragraphChunk);
+      hasNewContent = true;
+    }
   }
 
   if (currentParagraphs.length > 0) {
@@ -313,6 +344,53 @@ function splitTextIntoSections(baseTitle: string, text: string): ImportedKnowled
   }
 
   return [{ title: baseTitle, content: text }];
+}
+
+function splitLongParagraph(text: string, maxChars: number, overlapChars: number): string[] {
+  const sentences = text
+    .match(/[^.!?。！？]+[.!?。！？]?/g)
+    ?.map((sentence) => sentence.trim())
+    .filter(Boolean) || [text];
+  const chunks: string[] = [];
+  let current = "";
+
+  const pushCurrent = () => {
+    const normalized = normalizeText(current);
+    if (!normalized) return;
+    chunks.push(normalized);
+    current = getOverlapText(normalized, overlapChars);
+  };
+
+  for (const sentence of sentences) {
+    if (sentence.length > maxChars) {
+      if (current) pushCurrent();
+      for (let start = 0; start < sentence.length; start += maxChars - overlapChars) {
+        chunks.push(sentence.slice(start, start + maxChars).trim());
+      }
+      current = "";
+      continue;
+    }
+
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > maxChars) {
+      pushCurrent();
+      current = current ? `${current} ${sentence}` : sentence;
+    } else {
+      current = next;
+    }
+  }
+
+  if (current) pushCurrent();
+
+  return chunks.filter(Boolean);
+}
+
+function getOverlapText(text: string, overlapChars: number): string {
+  if (overlapChars <= 0 || text.length <= overlapChars) return "";
+
+  const tail = text.slice(-overlapChars);
+  const wordBoundary = tail.search(/\s\S+$/);
+  return (wordBoundary > 0 ? tail.slice(wordBoundary).trim() : tail.trim()).slice(0, overlapChars);
 }
 
 function looksLikeHeading(paragraph: string): boolean {

@@ -20,6 +20,8 @@ import {
   ToggleRight,
   Loader2,
   ArrowLeft,
+  Upload,
+  CheckCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -53,6 +55,16 @@ interface KnowledgeEntry {
   updatedAt: string;
 }
 
+interface ImportResult {
+  success: boolean;
+  filename: string;
+  sourceType: string;
+  chunksCreated: number;
+  chunksIndexed: number;
+  embeddingSkipped: number;
+  warnings: string[];
+}
+
 const PRIORITIES = [
   { value: 0, label: "Thường", icon: Minus, className: "bg-gray-100 text-gray-600" },
   { value: 1, label: "Trung bình", icon: ArrowUp, className: "bg-yellow-100 text-yellow-700" },
@@ -84,7 +96,12 @@ export default function KnowledgeBasePage() {
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryWithCount | null>(null);
-  const [categoryForm, setCategoryForm] = useState({ name: "", description: "", icon: "folder", color: "#4A7C9B" });
+  const [categoryForm, setCategoryForm] = useState({
+    name: "",
+    description: "",
+    icon: "folder",
+    color: "#4A7C9B",
+  });
   const [savingCategory, setSavingCategory] = useState(false);
 
   const [showEntryModal, setShowEntryModal] = useState(false);
@@ -92,9 +109,18 @@ export default function KnowledgeBasePage() {
   const [entryForm, setEntryForm] = useState({ title: "", content: "", priority: 0 });
   const [savingEntry, setSavingEntry] = useState(false);
 
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importForm, setImportForm] = useState({ priority: 0, isActive: true });
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState("");
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
 
-
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "category" | "entry"; id: string; name: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: "category" | "entry";
+    id: string;
+    name: string;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
@@ -151,7 +177,8 @@ export default function KnowledgeBasePage() {
     }
   }, [selectedCategoryId, fetchEntries]);
 
-  const selectedCategory = categories.find((category) => category.id === selectedCategoryId) || null;
+  const selectedCategory =
+    categories.find((category) => category.id === selectedCategoryId) || null;
 
   function openCategoryModal(category?: CategoryWithCount) {
     if (category) {
@@ -173,7 +200,9 @@ export default function KnowledgeBasePage() {
     if (!categoryForm.name.trim()) return;
     setSavingCategory(true);
     try {
-      const url = editingCategory ? `/api/knowledge/categories/${editingCategory.id}` : "/api/knowledge/categories";
+      const url = editingCategory
+        ? `/api/knowledge/categories/${editingCategory.id}`
+        : "/api/knowledge/categories";
       const method = editingCategory ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -202,13 +231,21 @@ export default function KnowledgeBasePage() {
     setShowEntryModal(true);
   }
 
-
+  function openImportModal() {
+    setImportFile(null);
+    setImportForm({ priority: 0, isActive: true });
+    setImportError("");
+    setImportResult(null);
+    setShowImportModal(true);
+  }
 
   async function saveEntry() {
     if (!entryForm.title.trim() || !selectedCategoryId) return;
     setSavingEntry(true);
     try {
-      const url = editingEntry ? `/api/knowledge/entries/${editingEntry.id}` : "/api/knowledge/entries";
+      const url = editingEntry
+        ? `/api/knowledge/entries/${editingEntry.id}`
+        : "/api/knowledge/entries";
       const method = editingEntry ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -227,7 +264,40 @@ export default function KnowledgeBasePage() {
     }
   }
 
+  async function submitImport() {
+    if (!selectedCategoryId || !importFile) return;
+    setImporting(true);
+    setImportError("");
+    setImportResult(null);
 
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      formData.append("categoryId", selectedCategoryId);
+      formData.append("priority", String(importForm.priority));
+      formData.append("isActive", String(importForm.isActive));
+
+      const res = await fetch("/api/knowledge/import", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setImportError(data.error || "Không thể import file.");
+        return;
+      }
+
+      setImportResult(data);
+      await fetchEntries(selectedCategoryId);
+      await fetchCategories();
+    } catch (err) {
+      console.error("Failed to import knowledge file:", err);
+      setImportError("Không thể import file. Vui lòng thử lại.");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function toggleEntryActive(entry: KnowledgeEntry) {
     try {
@@ -291,10 +361,12 @@ export default function KnowledgeBasePage() {
       <Header title="Kho kiến thức" description="Quản lý kiến thức cho trợ lý AI" />
 
       <div className="flex-1 overflow-hidden flex">
-        <div className={cn(
-          "w-full flex-shrink-0 bg-owly-surface flex-col",
-          mobileShowDetail ? "hidden" : "flex"
-        )}>
+        <div
+          className={cn(
+            "w-full flex-shrink-0 bg-owly-surface flex-col",
+            mobileShowDetail ? "hidden" : "flex"
+          )}
+        >
           <div className="px-4 py-3 border-b border-owly-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-owly-text">Danh mục</h3>
             <div className="flex items-center gap-2">
@@ -347,11 +419,17 @@ export default function KnowledgeBasePage() {
                     <CategoryIcon color={category.color} name={category.name} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-owly-text truncate">{category.name}</p>
-                        <span className="text-xs text-owly-text-light flex-shrink-0 ml-2">{category._count.entries}</span>
+                        <p className="text-sm font-medium text-owly-text truncate">
+                          {category.name}
+                        </p>
+                        <span className="text-xs text-owly-text-light flex-shrink-0 ml-2">
+                          {category._count.entries}
+                        </span>
                       </div>
                       {category.description && (
-                        <p className="text-xs text-owly-text-light truncate mt-0.5">{category.description}</p>
+                        <p className="text-xs text-owly-text-light truncate mt-0.5">
+                          {category.description}
+                        </p>
                       )}
                     </div>
                     <div className="hidden group-hover:flex items-center gap-0.5 flex-shrink-0">
@@ -368,7 +446,11 @@ export default function KnowledgeBasePage() {
                       <button
                         onClick={(event) => {
                           event.stopPropagation();
-                          setDeleteTarget({ type: "category", id: category.id, name: category.name });
+                          setDeleteTarget({
+                            type: "category",
+                            id: category.id,
+                            name: category.name,
+                          });
                         }}
                         className="p-1 text-owly-text-light hover:text-red-600 rounded transition-colors"
                         title="Xóa danh mục"
@@ -376,7 +458,9 @@ export default function KnowledgeBasePage() {
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    {selectedCategoryId === category.id && <ChevronRight className="h-4 w-4 text-owly-primary flex-shrink-0" />}
+                    {selectedCategoryId === category.id && (
+                      <ChevronRight className="h-4 w-4 text-owly-primary flex-shrink-0" />
+                    )}
                   </div>
                 ))}
               </div>
@@ -384,10 +468,7 @@ export default function KnowledgeBasePage() {
           </div>
         </div>
 
-        <div className={cn(
-          "w-full flex-col bg-owly-bg",
-          !mobileShowDetail ? "hidden" : "flex"
-        )}>
+        <div className={cn("w-full flex-col bg-owly-bg", !mobileShowDetail ? "hidden" : "flex")}>
           {!selectedCategory ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -414,19 +495,30 @@ export default function KnowledgeBasePage() {
                       setMobileShowDetail(false);
                       setSelectedCategoryId(null);
                     }}
-                    className="md:hidden mr-1 p-1.5 hover:bg-owly-primary-50 rounded-lg transition-colors flex-shrink-0"
+                    className="mr-1 inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium text-owly-text hover:bg-owly-primary-50 rounded-lg transition-colors flex-shrink-0"
                   >
                     <ArrowLeft className="h-5 w-5 text-owly-text" />
+                    <span className="hidden sm:inline">Quay lại</span>
                   </button>
                   <CategoryIcon color={selectedCategory.color} name={selectedCategory.name} />
                   <div>
-                    <h3 className="text-sm font-semibold text-owly-text">{selectedCategory.name}</h3>
+                    <h3 className="text-sm font-semibold text-owly-text">
+                      {selectedCategory.name}
+                    </h3>
                     {selectedCategory.description && (
                       <p className="text-xs text-owly-text-light">{selectedCategory.description}</p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={openImportModal}
+                    disabled={!selectedCategory}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-owly-primary border border-owly-primary/30 hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Nhập từ file
+                  </button>
                   <button
                     onClick={() => openEntryModal()}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-owly-primary hover:bg-owly-primary-dark rounded-lg transition-colors"
@@ -445,8 +537,12 @@ export default function KnowledgeBasePage() {
                 ) : entries.length === 0 ? (
                   <div className="text-center py-12">
                     <FileText className="h-10 w-10 mx-auto mb-3 text-owly-text-light opacity-40" />
-                    <p className="text-sm font-medium text-owly-text-light">Danh mục này chưa có mục kiến thức nào</p>
-                    <p className="text-xs text-owly-text-light mt-1">Thêm mục kiến thức để AI dùng khi tư vấn khách hàng.</p>
+                    <p className="text-sm font-medium text-owly-text-light">
+                      Danh mục này chưa có mục kiến thức nào
+                    </p>
+                    <p className="text-xs text-owly-text-light mt-1">
+                      Thêm mục kiến thức để AI dùng khi tư vấn khách hàng.
+                    </p>
                     <button
                       onClick={() => openEntryModal()}
                       className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-owly-primary border border-owly-primary/30 hover:bg-owly-primary-50 rounded-lg transition-colors"
@@ -460,7 +556,9 @@ export default function KnowledgeBasePage() {
                     {entries.map((entry) => {
                       const priority = getPriority(entry.priority);
                       const PriorityIcon = priority.icon;
-                      const contentPreview = entry.content ? entry.content.split("\n")[0].slice(0, 120) : "";
+                      const contentPreview = entry.content
+                        ? entry.content.split("\n")[0].slice(0, 120)
+                        : "";
 
                       return (
                         <div
@@ -474,7 +572,9 @@ export default function KnowledgeBasePage() {
                           <div className="flex items-start gap-3">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="text-sm font-medium text-owly-text">{entry.title}</h4>
+                                <h4 className="text-sm font-medium text-owly-text">
+                                  {entry.title}
+                                </h4>
                                 <span
                                   className={cn(
                                     "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium",
@@ -485,17 +585,24 @@ export default function KnowledgeBasePage() {
                                   {priority.label}
                                 </span>
                                 {!entry.isActive && (
-                                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Đã tắt</span>
+                                  <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">
+                                    Đã tắt
+                                  </span>
                                 )}
                               </div>
                               {contentPreview && (
-                                <p className="text-xs text-owly-text-light mt-1 truncate">{contentPreview}</p>
+                                <p className="text-xs text-owly-text-light mt-1 truncate">
+                                  {contentPreview}
+                                </p>
                               )}
                             </div>
 
                             <div className="flex items-center gap-1 flex-shrink-0">
                               <button
-                                onClick={(e) => { e.stopPropagation(); toggleEntryActive(entry); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleEntryActive(entry);
+                                }}
                                 className={cn(
                                   "p-1.5 rounded transition-colors",
                                   entry.isActive
@@ -504,17 +611,31 @@ export default function KnowledgeBasePage() {
                                 )}
                                 title={entry.isActive ? "Tắt mục" : "Bật mục"}
                               >
-                                {entry.isActive ? <ToggleRight className="h-4 w-4" /> : <ToggleLeft className="h-4 w-4" />}
+                                {entry.isActive ? (
+                                  <ToggleRight className="h-4 w-4" />
+                                ) : (
+                                  <ToggleLeft className="h-4 w-4" />
+                                )}
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); openEntryModal(entry); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEntryModal(entry);
+                                }}
                                 className="p-1.5 text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50 rounded transition-colors"
                                 title="Sửa mục"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                               </button>
                               <button
-                                onClick={(e) => { e.stopPropagation(); setDeleteTarget({ type: "entry", id: entry.id, name: entry.title }); }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget({
+                                    type: "entry",
+                                    id: entry.id,
+                                    name: entry.title,
+                                  });
+                                }}
                                 className="p-1.5 text-owly-text-light hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                                 title="Xóa mục"
                               >
@@ -535,10 +656,15 @@ export default function KnowledgeBasePage() {
 
       {showCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowCategoryModal(false)} />
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setShowCategoryModal(false)}
+          />
           <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-md mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-owly-border">
-              <h3 className="font-semibold text-owly-text">{editingCategory ? "Chỉnh sửa danh mục" : "Tạo danh mục mới"}</h3>
+              <h3 className="font-semibold text-owly-text">
+                {editingCategory ? "Chỉnh sửa danh mục" : "Tạo danh mục mới"}
+              </h3>
               <button
                 onClick={() => setShowCategoryModal(false)}
                 className="p-1 text-owly-text-light hover:text-owly-text rounded transition-colors"
@@ -564,7 +690,9 @@ export default function KnowledgeBasePage() {
                 <input
                   type="text"
                   value={categoryForm.description}
-                  onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                  onChange={(e) =>
+                    setCategoryForm({ ...categoryForm, description: e.target.value })
+                  }
                   placeholder="Mô tả ngắn cho danh mục này"
                   className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary"
                 />
@@ -617,15 +745,146 @@ export default function KnowledgeBasePage() {
         </div>
       )}
 
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !importing && setShowImportModal(false)}
+          />
+          <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-owly-border">
+              <h3 className="font-semibold text-owly-text">Nhập kiến thức từ file</h3>
+              <button
+                onClick={() => setShowImportModal(false)}
+                disabled={importing}
+                className="p-1 text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
 
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-owly-text mb-1.5">File</label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md"
+                  onChange={(event) => {
+                    setImportFile(event.target.files?.[0] || null);
+                    setImportError("");
+                    setImportResult(null);
+                  }}
+                  className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary"
+                />
+                <p className="text-xs text-owly-text-light mt-1">
+                  Hỗ trợ PDF, Word, Excel, CSV, TXT và MD. Tối đa 10MB.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-owly-text mb-1.5">Ưu tiên</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {PRIORITIES.map((priority) => {
+                    const Icon = priority.icon;
+                    return (
+                      <button
+                        key={priority.value}
+                        onClick={() => setImportForm({ ...importForm, priority: priority.value })}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all",
+                          importForm.priority === priority.value
+                            ? cn(priority.className, "border-current ring-1 ring-current/20")
+                            : "border-owly-border text-owly-text-light hover:border-owly-primary/30"
+                        )}
+                      >
+                        <Icon className="h-3 w-3" />
+                        {priority.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                onClick={() => setImportForm({ ...importForm, isActive: !importForm.isActive })}
+                className={cn(
+                  "inline-flex items-center gap-2 text-sm transition-colors",
+                  importForm.isActive ? "text-owly-primary" : "text-owly-text-light"
+                )}
+              >
+                {importForm.isActive ? (
+                  <ToggleRight className="h-5 w-5" />
+                ) : (
+                  <ToggleLeft className="h-5 w-5" />
+                )}
+                {importForm.isActive ? "Kích hoạt sau khi import" : "Import ở trạng thái tắt"}
+              </button>
+
+              {importError && (
+                <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
+              {importResult && (
+                <div className="space-y-2 px-3 py-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                  <div className="flex items-center gap-2 font-medium">
+                    <CheckCircle className="h-4 w-4" />
+                    Đã import {importResult.filename}
+                  </div>
+                  <p>
+                    Tạo {importResult.chunksCreated} mục, index embedding{" "}
+                    {importResult.chunksIndexed} mục, bỏ qua {importResult.embeddingSkipped} mục.
+                  </p>
+                  {importResult.warnings.length > 0 && (
+                    <ul className="list-disc pl-5 space-y-1 text-green-900">
+                      {importResult.warnings.map((warning, index) => (
+                        <li key={`${warning}-${index}`}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-owly-border">
+              <button
+                onClick={() => setShowImportModal(false)}
+                disabled={importing}
+                className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text disabled:opacity-50 rounded-lg transition-colors"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={submitImport}
+                disabled={!importFile || !selectedCategoryId || importing}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary hover:bg-owly-primary-dark disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+              >
+                {importing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Upload className="h-3.5 w-3.5" />
+                )}
+                Nhập file
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEntryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowEntryModal(false)} />
           <div className="relative bg-owly-surface rounded-xl shadow-xl border border-owly-border w-full max-w-lg mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-owly-border">
-              <h3 className="font-semibold text-owly-text">{editingEntry ? "Chỉnh sửa mục" : "Tạo mục mới"}</h3>
-              <button onClick={() => setShowEntryModal(false)} className="p-1 text-owly-text-light hover:text-owly-text rounded transition-colors">
+              <h3 className="font-semibold text-owly-text">
+                {editingEntry ? "Chỉnh sửa mục" : "Tạo mục mới"}
+              </h3>
+              <button
+                onClick={() => setShowEntryModal(false)}
+                className="p-1 text-owly-text-light hover:text-owly-text rounded transition-colors"
+              >
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -679,7 +938,10 @@ export default function KnowledgeBasePage() {
             </div>
 
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-owly-border">
-              <button onClick={() => setShowEntryModal(false)} className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text rounded-lg transition-colors">
+              <button
+                onClick={() => setShowEntryModal(false)}
+                className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text rounded-lg transition-colors"
+              >
                 Hủy
               </button>
               <button
@@ -704,15 +966,23 @@ export default function KnowledgeBasePage() {
                 <div className="p-2 rounded-full bg-red-50">
                   <AlertCircle className="h-5 w-5 text-red-600" />
                 </div>
-                <h3 className="font-semibold text-owly-text">Xóa {deleteTarget.type === "category" ? "danh mục" : "mục"}</h3>
+                <h3 className="font-semibold text-owly-text">
+                  Xóa {deleteTarget.type === "category" ? "danh mục" : "mục"}
+                </h3>
               </div>
               <p className="text-sm text-owly-text-light">
-                Bạn có chắc muốn xóa <span className="font-medium text-owly-text">{deleteTarget.name}</span>?
-                {deleteTarget.type === "category" && " Thao tác này cũng sẽ xóa toàn bộ mục trong danh mục này."} Hành động này không thể hoàn tác.
+                Bạn có chắc muốn xóa{" "}
+                <span className="font-medium text-owly-text">{deleteTarget.name}</span>?
+                {deleteTarget.type === "category" &&
+                  " Thao tác này cũng sẽ xóa toàn bộ mục trong danh mục này."}{" "}
+                Hành động này không thể hoàn tác.
               </p>
             </div>
             <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-owly-border">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text rounded-lg transition-colors">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 text-sm font-medium text-owly-text-light hover:text-owly-text rounded-lg transition-colors"
+              >
                 Hủy
               </button>
               <button
