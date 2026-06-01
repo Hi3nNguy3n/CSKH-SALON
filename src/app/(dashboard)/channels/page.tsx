@@ -1,6 +1,7 @@
 "use client";
 
 import { Header } from "@/components/layout/header";
+import Link from "next/link";
 import {
   MessageCircle,
   Mail,
@@ -17,6 +18,8 @@ import {
   XCircle,
   Eye,
   EyeOff,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -35,6 +38,8 @@ interface ChannelData {
 }
 
 type WhatsAppMode = "web" | "api";
+const CHANNELS_PER_PAGE = 4;
+const CHANNEL_PAGE_ORDER = ["whatsapp", "email", "phone", "zalo", "facebook", "instagram"];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,7 +50,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap",
         isConnected
           ? "bg-owly-success/10 text-owly-success"
           : "bg-owly-danger/10 text-owly-danger"
@@ -166,8 +171,8 @@ function WhatsAppCard({
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-lg bg-green-50 text-green-600">
               <MessageCircle className="h-5 w-5" />
             </div>
@@ -367,8 +372,8 @@ function EmailCard({
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
               <Mail className="h-5 w-5" />
             </div>
@@ -568,8 +573,8 @@ function PhoneCard({
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
       {/* Header */}
       <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-lg bg-purple-50 text-purple-600">
               <Phone className="h-5 w-5" />
             </div>
@@ -719,8 +724,8 @@ function ZaloCard({
   return (
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
       <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-lg bg-cyan-50 text-cyan-600">
               <MessageCircle className="h-5 w-5" />
             </div>
@@ -774,7 +779,7 @@ function ZaloCard({
         ) : null}
       </div>
 
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
+      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={saving}
@@ -821,6 +826,187 @@ function ZaloCard({
 }
 
 // ---------------------------------------------------------------------------
+// Meta Channel Card
+// ---------------------------------------------------------------------------
+
+type MetaChannelType = "facebook" | "instagram";
+
+function MetaReadinessBadge({
+  isActive,
+  hasAccessToken,
+}: {
+  isActive: boolean;
+  hasAccessToken: boolean;
+}) {
+  const label = hasAccessToken ? (isActive ? "Đã bật" : "Đã cấu hình") : "Thiếu token";
+  const isReady = hasAccessToken && isActive;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
+        isReady
+          ? "bg-owly-success/10 text-owly-success"
+          : hasAccessToken
+            ? "bg-amber-50 text-amber-700"
+            : "bg-owly-danger/10 text-owly-danger"
+      )}
+    >
+      <span
+        className={cn(
+          "w-1.5 h-1.5 rounded-full",
+          isReady ? "bg-owly-success" : hasAccessToken ? "bg-amber-500" : "bg-owly-danger"
+        )}
+      />
+      {label}
+    </span>
+  );
+}
+
+function SecretIndicator({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-owly-border bg-owly-bg px-3 py-2">
+      <span className="text-xs font-medium text-owly-text-light">{label}</span>
+      <span
+        className={cn(
+          "text-xs font-medium",
+          enabled ? "text-owly-success" : "text-owly-danger"
+        )}
+      >
+        {enabled ? "Đã có" : "Chưa có"}
+      </span>
+    </div>
+  );
+}
+
+function MetaChannelCard({
+  channel,
+  type,
+  onSave,
+  saving,
+}: {
+  channel: ChannelData;
+  type: MetaChannelType;
+  onSave: (type: string, config: Record<string, unknown>, isActive: boolean) => void;
+  saving: boolean;
+}) {
+  const cfg = channel.config as Record<string, string | boolean>;
+  const isFacebook = type === "facebook";
+  const [isActive, setIsActive] = useState(channel.isActive);
+  const [verifyToken, setVerifyToken] = useState(String(cfg.verifyToken || ""));
+  const [accountId, setAccountId] = useState(
+    String(isFacebook ? cfg.pageId || "" : cfg.businessAccountId || "")
+  );
+  const [graphVersion, setGraphVersion] = useState(String(cfg.graphVersion || "v25.0"));
+  const hasAccessToken = Boolean(
+    isFacebook ? cfg.hasPageAccessToken : cfg.hasAccessToken
+  );
+  const hasAppSecret = Boolean(cfg.hasAppSecret);
+  const title = isFacebook ? "Facebook Messenger" : "Instagram Direct";
+  const description = isFacebook
+    ? "Nhận và trả lời tin nhắn từ Facebook Page"
+    : "Nhận và trả lời tin nhắn Instagram Direct";
+
+  return (
+    <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
+      <div className="px-5 py-4 border-b border-owly-border">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className={cn(
+                "p-2.5 rounded-lg",
+                isFacebook ? "bg-blue-50 text-blue-600" : "bg-pink-50 text-pink-600"
+              )}
+            >
+              <MessageCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-owly-text">{title}</h3>
+              <p className="text-xs text-owly-text-light mt-0.5">{description}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <MetaReadinessBadge isActive={isActive} hasAccessToken={hasAccessToken} />
+            <Toggle enabled={isActive} onChange={setIsActive} />
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        <div className="rounded-lg border border-owly-primary/20 bg-owly-primary-50/40 p-3">
+          <p className="text-xs text-owly-text">
+            Webhook dùng chung: <span className="font-mono">/api/webhooks/meta</span>
+          </p>
+        </div>
+
+        <FieldInput
+          label="Webhook Verify Token"
+          value={verifyToken}
+          onChange={setVerifyToken}
+          placeholder="meta-test-token-123"
+          isSecret
+        />
+        <FieldInput
+          label={isFacebook ? "Page ID" : "Instagram Business Account ID"}
+          value={accountId}
+          onChange={setAccountId}
+          placeholder={isFacebook ? "1234567890" : "17841400000000000"}
+        />
+        <FieldInput
+          label="Graph API Version"
+          value={graphVersion}
+          onChange={setGraphVersion}
+          placeholder="v25.0"
+        />
+
+        <div className="grid grid-cols-2 gap-3">
+          <SecretIndicator
+            label={isFacebook ? "Page Token" : "Access Token"}
+            enabled={hasAccessToken}
+          />
+          <SecretIndicator label="App Secret" enabled={hasAppSecret} />
+        </div>
+      </div>
+
+      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() =>
+            onSave(
+              type,
+              {
+                verifyToken,
+                graphVersion,
+                ...(isFacebook
+                  ? { pageId: accountId }
+                  : { businessAccountId: accountId }),
+              },
+              isActive
+            )
+          }
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
+          Save
+        </button>
+        <Link
+          href="/settings"
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-owly-primary bg-owly-primary-50 border border-owly-primary/20 rounded-lg hover:bg-owly-primary-100 transition-colors"
+        >
+          <Key className="h-4 w-4" />
+          Cấu hình secret
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -828,6 +1014,7 @@ export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -964,6 +1151,76 @@ export default function ChannelsPage() {
       status: "disconnected",
     };
 
+  const totalPages = Math.ceil(CHANNEL_PAGE_ORDER.length / CHANNELS_PER_PAGE);
+  const visibleChannelTypes = CHANNEL_PAGE_ORDER.slice(
+    (currentPage - 1) * CHANNELS_PER_PAGE,
+    currentPage * CHANNELS_PER_PAGE
+  );
+
+  const renderChannelCard = (type: string) => {
+    if (type === "whatsapp") {
+      return (
+        <WhatsAppCard
+          key={type}
+          channel={getChannel("whatsapp")}
+          onSave={handleSave}
+          onAction={handleAction}
+          saving={saving}
+        />
+      );
+    }
+
+    if (type === "email") {
+      return (
+        <EmailCard
+          key={type}
+          channel={getChannel("email")}
+          onSave={handleSave}
+          onAction={handleAction}
+          saving={saving}
+        />
+      );
+    }
+
+    if (type === "phone") {
+      return (
+        <PhoneCard
+          key={type}
+          channel={getChannel("phone")}
+          onSave={handleSave}
+          onAction={handleAction}
+          saving={saving}
+        />
+      );
+    }
+
+    if (type === "zalo") {
+      return (
+        <ZaloCard
+          key={type}
+          channel={getChannel("zalo")}
+          onSave={handleSave}
+          onAction={handleAction}
+          saving={saving}
+        />
+      );
+    }
+
+    if (type === "facebook" || type === "instagram") {
+      return (
+        <MetaChannelCard
+          key={type}
+          channel={getChannel(type)}
+          type={type}
+          onSave={handleSave}
+          saving={saving}
+        />
+      );
+    }
+
+    return null;
+  };
+
   return (
     <>
       <Header
@@ -977,31 +1234,36 @@ export default function ChannelsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-owly-primary" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 max-w-7xl">
-            <WhatsAppCard
-              channel={getChannel("whatsapp")}
-              onSave={handleSave}
-              onAction={handleAction}
-              saving={saving}
-            />
-            <EmailCard
-              channel={getChannel("email")}
-              onSave={handleSave}
-              onAction={handleAction}
-              saving={saving}
-            />
-            <PhoneCard
-              channel={getChannel("phone")}
-              onSave={handleSave}
-              onAction={handleAction}
-              saving={saving}
-            />
-            <ZaloCard
-              channel={getChannel("zalo")}
-              onSave={handleSave}
-              onAction={handleAction}
-              saving={saving}
-            />
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl">
+              {visibleChannelTypes.map(renderChannelCard)}
+            </div>
+
+            <div className="flex items-center justify-between max-w-7xl border-t border-owly-border pt-4">
+              <p className="text-sm text-owly-text-light">
+                Trang {currentPage} / {totalPages}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-owly-text bg-owly-surface border border-owly-border rounded-lg hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-owly-text bg-owly-surface border border-owly-border rounded-lg hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Sau
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
