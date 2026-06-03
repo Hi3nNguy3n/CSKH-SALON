@@ -5,7 +5,7 @@ const spec = {
   info: {
     title: "SalonDesk API",
     description:
-      "AI-powered customer support agent API. Multi-channel support for WhatsApp, Email, and Phone with autonomous AI actions.",
+      "AI-powered customer support agent API. Multi-channel support for WhatsApp, Email, Phone, Facebook Messenger, and Instagram Direct Messaging with autonomous AI actions.",
     version: "2026-04-07",
     contact: {
       name: "Hesper Labs",
@@ -27,6 +27,19 @@ const spec = {
     { name: "Team", description: "Team members and departments" },
     { name: "Automation", description: "Automation rules engine" },
     { name: "Webhooks", description: "Webhook management and delivery" },
+    {
+      name: "Meta Shared Webhook",
+      description: "Shared Meta webhook callback for Facebook Messenger and Instagram Direct Messaging",
+    },
+    {
+      name: "Facebook Messenger",
+      description: "Facebook Page Messenger setup, payload mapping, and channel config",
+    },
+    {
+      name: "Instagram Direct Messaging",
+      description:
+        "Instagram Direct Messaging API / Instagram API with Instagram Login setup, payload mapping, and channel config",
+    },
     { name: "Chat", description: "AI chat inference" },
     { name: "Settings", description: "System configuration" },
     { name: "Admin", description: "User and API key management" },
@@ -73,7 +86,10 @@ const spec = {
           {
             name: "channel",
             in: "query",
-            schema: { type: "string", enum: ["whatsapp", "email", "phone", "api"] },
+            schema: {
+              type: "string",
+              enum: ["whatsapp", "email", "phone", "facebook", "instagram", "api"],
+            },
           },
           {
             name: "status",
@@ -274,6 +290,217 @@ const spec = {
         responses: { "201": { description: "Created webhook" } },
       },
     },
+    "/webhooks/meta": {
+      get: {
+        tags: ["Meta Shared Webhook"],
+        summary: "Verify shared Meta webhook",
+        description:
+          "Verifies the shared callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode=subscribe and hub.verify_token matches Settings > Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as text/plain.",
+        security: [],
+        parameters: [
+          {
+            name: "hub.mode",
+            in: "query",
+            required: true,
+            description:
+              "Always use subscribe. Meta sends this value when verifying the webhook callback.",
+            schema: { type: "string", default: "subscribe", example: "subscribe" },
+          },
+          {
+            name: "hub.verify_token",
+            in: "query",
+            required: true,
+            schema: { type: "string", example: "my-verify-token" },
+          },
+          {
+            name: "hub.challenge",
+            in: "query",
+            required: true,
+            description: "Challenge string returned as text when verification succeeds.",
+            schema: { type: "string", default: "hello123", example: "hello123" },
+          },
+        ],
+        responses: {
+          "200": { description: "Plain text challenge string" },
+          "403": { description: "Invalid verify token" },
+          "500": { description: "Verify token is not configured" },
+        },
+      },
+      post: {
+        tags: ["Meta Shared Webhook"],
+        summary: "Receive shared Meta webhook events",
+        description:
+          "Receives Meta webhook events, maps object=page to channel=facebook and object=instagram to channel=instagram, stores customer contacts as facebook:<psid> or instagram:<sender_id>, runs the existing chat pipeline, and replies through Meta Send API. Current phase handles text messages only; non-text, delivery/read, reaction, and echo events are ignored.",
+        security: [],
+        parameters: [
+          {
+            name: "x-hub-signature-256",
+            in: "header",
+            required: false,
+            schema: { type: "string" },
+            description:
+              "Required when META_APP_SECRET or a channel appSecret is configured.",
+          },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: { oneOf: [{ $ref: "#/components/schemas/MetaFacebookWebhookPayload" }, { $ref: "#/components/schemas/MetaInstagramWebhookPayload" }] },
+              examples: {
+                facebook: {
+                  value: {
+                    object: "page",
+                    entry: [
+                      {
+                        messaging: [
+                          {
+                            sender: { id: "USER_PSID" },
+                            recipient: { id: "PAGE_ID" },
+                            message: { text: "Hello" },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+                instagram: {
+                  value: {
+                    object: "instagram",
+                    entry: [
+                      {
+                        messaging: [
+                          {
+                            sender: { id: "IG_SENDER_ID" },
+                            recipient: { id: "IG_BUSINESS_ID" },
+                            message: { text: "Hello" },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": { description: "Accepted or ignored valid payload" },
+          "400": { description: "Invalid JSON payload" },
+          "401": { description: "Invalid signature" },
+        },
+      },
+    },
+    "/channels": {
+      get: {
+        tags: ["Facebook Messenger", "Instagram Direct Messaging", "Settings"],
+        summary: "List channels with sanitized Meta config",
+        description:
+          "Lists configured channels, including facebook and instagram. GET responses never return raw access tokens or app secrets; they expose flags such as hasPageAccessToken, hasAccessToken, and hasAppSecret.",
+        responses: { "200": { description: "Channel list with sanitized config" } },
+      },
+      post: {
+        tags: ["Facebook Messenger", "Instagram Direct Messaging", "Settings"],
+        summary: "Create or update a channel config",
+        description:
+          "Creates or updates channel config. For Meta channels, DB config takes priority over .env fallback. If token/appSecret fields are blank or masked on save, the existing secret is preserved.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ChannelConfigRequest" },
+              examples: {
+                facebook: {
+                  value: {
+                    type: "facebook",
+                    isActive: true,
+                    config: {
+                      verifyToken: "my-verify-token",
+                      pageAccessToken: "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN",
+                      pageId: "OPTIONAL_PAGE_ID",
+                      graphVersion: "v25.0",
+                      appSecret: "YOUR_META_APP_SECRET",
+                    },
+                  },
+                },
+                instagram: {
+                  value: {
+                    type: "instagram",
+                    isActive: true,
+                    config: {
+                      verifyToken: "my-verify-token",
+                      accessToken: "YOUR_INSTAGRAM_ACCESS_TOKEN",
+                      businessAccountId: "OPTIONAL_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+                      graphVersion: "v25.0",
+                      appSecret: "YOUR_META_APP_SECRET",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: { "200": { description: "Saved channel with sanitized config" } },
+      },
+    },
+    "/channels/{type}": {
+      get: {
+        tags: ["Facebook Messenger", "Instagram Direct Messaging", "Settings"],
+        summary: "Get one channel config",
+        parameters: [
+          {
+            name: "type",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              enum: ["facebook", "instagram", "whatsapp", "email", "phone", "zalo"],
+              default: "facebook",
+              example: "facebook",
+            },
+          },
+        ],
+        responses: { "200": { description: "One channel with sanitized config" } },
+      },
+      put: {
+        tags: ["Facebook Messenger", "Instagram Direct Messaging", "Settings"],
+        summary: "Update one channel config",
+        description:
+          "Use type=facebook for Facebook Page Messenger and type=instagram for Instagram Direct Messaging. Page ID and Instagram Business Account ID are optional metadata; sending replies depends on a valid access token.",
+        parameters: [
+          {
+            name: "type",
+            in: "path",
+            required: true,
+            schema: {
+              type: "string",
+              enum: ["facebook", "instagram", "whatsapp", "email", "phone", "zalo"],
+              default: "instagram",
+              example: "instagram",
+            },
+          },
+        ],
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/ChannelConfigRequest" },
+            },
+          },
+        },
+        responses: { "200": { description: "Updated channel with sanitized config" } },
+      },
+      post: {
+        tags: ["Settings"],
+        summary: "Connect, disconnect, or test a channel",
+        parameters: [
+          {
+            name: "type",
+            in: "path",
+            required: true,
+            schema: { type: "string", enum: ["facebook", "instagram", "whatsapp", "email", "phone", "zalo"] },
+          },
+        ],
+        responses: { "200": { description: "Channel action result" } },
+      },
+    },
     "/webhooks/{id}/deliveries": {
       get: {
         tags: ["Webhooks"],
@@ -394,6 +621,84 @@ const spec = {
               details: {},
             },
           },
+        },
+      },
+      ChannelConfigRequest: {
+        type: "object",
+        required: ["type"],
+        properties: {
+          type: {
+            type: "string",
+            enum: ["facebook", "instagram", "whatsapp", "email", "phone", "zalo"],
+          },
+          isActive: { type: "boolean" },
+          config: {
+            oneOf: [
+              { $ref: "#/components/schemas/FacebookChannelConfig" },
+              { $ref: "#/components/schemas/InstagramChannelConfig" },
+            ],
+          },
+        },
+      },
+      FacebookChannelConfig: {
+        type: "object",
+        properties: {
+          verifyToken: {
+            type: "string",
+            description: "Webhook verify token used by Meta webhook verification.",
+          },
+          pageAccessToken: {
+            type: "string",
+            description: "Secret token used to send replies through the Facebook Page.",
+          },
+          pageId: {
+            type: "string",
+            description:
+              "Optional Facebook Page ID for notes/config checks. This is not the app ID and not a customer PSID.",
+          },
+          graphVersion: { type: "string", example: "v25.0" },
+          appSecret: {
+            type: "string",
+            description:
+              "Optional in dev, recommended in production to verify x-hub-signature-256.",
+          },
+        },
+      },
+      InstagramChannelConfig: {
+        type: "object",
+        properties: {
+          verifyToken: {
+            type: "string",
+            description: "Webhook verify token used by Meta webhook verification.",
+          },
+          accessToken: {
+            type: "string",
+            description: "Secret token used to send replies through Instagram Direct Messaging.",
+          },
+          businessAccountId: {
+            type: "string",
+            description: "Optional Instagram Business/Professional account ID.",
+          },
+          graphVersion: { type: "string", example: "v25.0" },
+          appSecret: {
+            type: "string",
+            description:
+              "Optional in dev, recommended in production to verify x-hub-signature-256.",
+          },
+        },
+      },
+      MetaFacebookWebhookPayload: {
+        type: "object",
+        properties: {
+          object: { type: "string", example: "page" },
+          entry: { type: "array", items: { type: "object" } },
+        },
+      },
+      MetaInstagramWebhookPayload: {
+        type: "object",
+        properties: {
+          object: { type: "string", example: "instagram" },
+          entry: { type: "array", items: { type: "object" } },
         },
       },
     },

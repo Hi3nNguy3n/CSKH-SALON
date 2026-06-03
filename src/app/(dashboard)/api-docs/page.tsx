@@ -18,7 +18,7 @@ import {
   Download,
   Heart,
 } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -32,8 +32,27 @@ interface Endpoint {
   requestBody?: Record<string, unknown>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   responseExample: any;
-  params?: { name: string; type: string; required: boolean; description: string }[];
-  queryParams?: { name: string; type: string; required: boolean; description: string }[];
+  params?: {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+    defaultValue?: string;
+  }[];
+  queryParams?: {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+    defaultValue?: string;
+  }[];
+  headers?: {
+    name: string;
+    type: string;
+    required: boolean;
+    description: string;
+    defaultValue?: string;
+  }[];
 }
 
 interface ApiSection {
@@ -41,6 +60,10 @@ interface ApiSection {
   name: string;
   icon: React.ElementType;
   endpoints: Endpoint[];
+  notes?: string[];
+  links?: { label: string; url: string }[];
+  examples?: { label: string; data: unknown }[];
+  guideGroups?: { title: string; items: string[] }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -428,6 +451,545 @@ const apiSections: ApiSection[] = [
     ],
   },
   {
+    id: "meta-setup-guide",
+    name: "Meta Setup Guide",
+    icon: Key,
+    notes: [
+      "This guide is for admins or customers who need to connect Facebook Messenger and Instagram Direct Messaging for the first time.",
+      "Both Facebook and Instagram use the same callback URL in CSKH-SALON: <APP_ORIGIN>/api/webhooks/meta.",
+      "Use this guide to understand what each key/token is, where it comes from, and where to paste it in Settings.",
+      "Meta Dashboard screens may change. Use the official Meta docs links as the source of truth for exact button names and review requirements.",
+      "Never paste real access tokens or app secrets into chat, screenshots, public docs, logs, or Git commits.",
+    ],
+    guideGroups: [
+      {
+        title: "1. Before you start",
+        items: [
+          "Confirm the business has a Facebook Page for Messenger. A personal Facebook profile is not enough for this integration.",
+          "Confirm the business has an Instagram Business or Creator account for Instagram Direct Messaging.",
+          "Make sure the person doing setup has admin/manage access to the Meta App, Facebook Page, and Instagram account.",
+          "Prepare the public app URL. In production this is the customer domain; in local testing use a public HTTPS tunnel such as ngrok.",
+          "Decide one Verify Token string, for example my-salon-meta-verify-token. This is not provided by Meta; you create it and paste the same value into CSKH-SALON and Meta Dashboard.",
+          "Facebook and Instagram can use the same Verify Token for simplicity, or separate Verify Tokens if configured separately. The value entered in Meta Dashboard must match the value saved in the corresponding CSKH-SALON channel settings.",
+          "Keep Page Access Token, Instagram Access Token, and App Secret private. Do not send real values in chat, screenshots, public docs, or commits.",
+        ],
+      },
+      {
+        title: "2. Understand what each Meta value means",
+        items: [
+          "Meta Developer App: the container in developers.facebook.com where products, webhook callback, app secret, and permissions are configured.",
+          "Facebook Page: the public page customers message through Messenger. It is different from the Meta Developer App.",
+          "Instagram Business or Creator Account: the Instagram account customers message through Direct Messaging.",
+          "Callback URL: the CSKH-SALON webhook URL Meta calls. Use <APP_ORIGIN>/api/webhooks/meta for both Facebook and Instagram.",
+          "Verify Token: a shared text value used only when Meta verifies the callback URL. CSKH-SALON checks hub.verify_token against this value.",
+          "Access Token: the secret credential CSKH-SALON uses to send replies back to Facebook or Instagram.",
+          "App Secret: the Meta App secret used to validate x-hub-signature-256 on webhook POST requests.",
+          "Graph Version: the Meta Graph API version used for send/config calls, for example v25.0.",
+        ],
+      },
+      {
+        title: "3. Where to paste in CSKH-SALON",
+        items: [
+          "Settings -> Facebook -> Verify Token.",
+          "Settings -> Facebook -> Page Access Token.",
+          "Settings -> Facebook -> Page ID, optional.",
+          "Settings -> Facebook -> Graph Version.",
+          "Settings -> Facebook -> App Secret, optional but recommended in production.",
+          "Settings -> Instagram -> Verify Token.",
+          "Settings -> Instagram -> Access Token.",
+          "Settings -> Instagram -> Business Account ID, optional.",
+          "Settings -> Instagram -> Graph Version.",
+          "Settings -> Instagram -> App Secret, optional but recommended in production.",
+        ],
+      },
+      {
+        title: "4. Create or choose the Meta Developer App",
+        items: [
+          "Open Meta for Developers, then open Apps. If the customer already has a Meta App, use that app instead of creating a duplicate.",
+          "Create an app only if there is no suitable existing app for this business.",
+          "Inside the app, add or configure the Messenger product for Facebook Messenger.",
+          "Inside the same app, add or configure the Instagram product/API flow for Instagram Direct Messaging.",
+          "Open App settings and copy the App Secret only if CSKH-SALON will verify webhook signatures in this environment.",
+          "Do not confuse App ID with Page ID. App ID identifies the Meta Developer App; Page ID identifies the Facebook Page.",
+        ],
+      },
+      {
+        title: "5. Prepare the Facebook Page",
+        items: [
+          "Create or choose the Facebook Page that customers will message.",
+          "Confirm the setup user can manage the Page in Meta/Facebook business tools.",
+          "If the Page is new, finish basic Page setup first: name, category, contact info, and Messenger availability.",
+          "In Meta Dashboard, select this Page when configuring the Messenger product.",
+          "Optional Page ID can be copied from Page settings or looked up with Graph API after you have a Page Access Token.",
+        ],
+      },
+      {
+        title: "6. Get the Facebook Page Access Token",
+        items: [
+          "In the Meta Developer App, open the Messenger or Messenger API setup area.",
+          "Select the Facebook Page that CSKH-SALON should reply from.",
+          "Generate or copy the Page Access Token for that Page.",
+          "Paste it into CSKH-SALON Settings -> Facebook -> Page Access Token.",
+          "Optional Page ID lookup: call https://graph.facebook.com/v25.0/me?fields=id,name&access_token=YOUR_FACEBOOK_PAGE_ACCESS_TOKEN and use the returned id.",
+          "If the token later returns 401 or 403, regenerate it or check permissions/app mode/review in Meta Dashboard.",
+        ],
+      },
+      {
+        title: "7. Configure Facebook Messenger webhook",
+        items: [
+          "In CSKH-SALON Settings -> Facebook, fill Verify Token, Page Access Token, Graph Version, optional Page ID, and optional App Secret.",
+          "Save the Facebook channel config before testing Meta verification.",
+          "In Meta Dashboard webhook settings, set Callback URL to <APP_ORIGIN>/api/webhooks/meta.",
+          "Set Verify Token in Meta Dashboard to exactly the same value saved in CSKH-SALON.",
+          "Subscribe the Facebook Page/webhook to the Messenger message events required by the app.",
+          "Send a real message to the Facebook Page and confirm CSKH-SALON creates a conversation with channel=facebook.",
+        ],
+      },
+      {
+        title: "8. Prepare the Instagram account",
+        items: [
+          "Use an Instagram Business or Creator account according to Meta's current requirements.",
+          "Confirm the setup user can manage the Instagram account and any related business assets required by Meta.",
+          "Use Instagram API with Instagram Login / Direct Messaging. Instagram Basic Display API is not enough for chatbot messaging.",
+          "If the account is new or not eligible, complete Meta's account/business setup first before connecting CSKH-SALON.",
+          "Do not reuse a Facebook Page Access Token as the Instagram Access Token for this direct Instagram flow.",
+        ],
+      },
+      {
+        title: "9. Get the Instagram Access Token",
+        items: [
+          "In the Meta Developer App, open the Instagram API with Instagram Login setup flow.",
+          "Configure the app/account according to Meta's Instagram Direct Messaging requirements.",
+          "Complete the authorization/login step for the Instagram account that should receive messages.",
+          "Copy the Instagram Access Token produced by that flow.",
+          "Paste it into CSKH-SALON Settings -> Instagram -> Access Token.",
+          "Optional Business Account ID is metadata for checking/debugging. Webhook recipient.id can also help confirm which Instagram account received a message.",
+        ],
+      },
+      {
+        title: "10. Configure Instagram Direct Messaging webhook",
+        items: [
+          "In CSKH-SALON Settings -> Instagram, fill Verify Token, Access Token, Graph Version, optional Business Account ID, and optional App Secret.",
+          "Save the Instagram channel config before testing Meta verification.",
+          "In Meta Dashboard webhook settings, use the same shared callback URL: <APP_ORIGIN>/api/webhooks/meta.",
+          "Set Verify Token in Meta Dashboard to exactly the same value saved in CSKH-SALON.",
+          "Subscribe the required Instagram messaging/webhook events in Meta Dashboard.",
+          "Send a real DM to the Instagram account and confirm CSKH-SALON creates a conversation with channel=instagram.",
+        ],
+      },
+      {
+        title: "11. Production note",
+        items: [
+          "In development mode, only admins, developers, or testers may be able to interact with the Meta App.",
+          "If internal testers can send messages but real customers cannot, check Meta App Review, required permissions, app mode, and business verification requirements.",
+          "Before going live for a customer, review the official Meta docs for the current permission and review requirements for Messenger and Instagram Direct Messaging.",
+          "Do not treat a successful local webhook test as full production approval. It only proves CSKH-SALON can receive the payload shape.",
+        ],
+      },
+      {
+        title: "12. How to know setup is working",
+        items: [
+          "Meta webhook verification succeeds when Meta sends hub.mode=subscribe and CSKH-SALON returns hub.challenge as plain text.",
+          "Facebook test succeeds when a Messenger message creates or updates a conversation with channel=facebook.",
+          "Instagram test succeeds when an Instagram DM creates or updates a conversation with channel=instagram.",
+          "Channel config checks should show hasPageAccessToken/hasAccessToken and hasAppSecret without exposing raw secret values.",
+          "If AI reply is not sent, check both channel delivery config and the AI provider/API key config. Webhook receive and chatbot reply are two separate steps.",
+        ],
+      },
+      {
+        title: "13. Common troubleshooting",
+        items: [
+          "Webhook verify fails: check callback URL, public HTTPS access, exact Verify Token match, and whether the app server is running.",
+          "Webhook receives Facebook payload in Instagram docs: use only the shared webhook Try it endpoint; platform examples are documentation-only examples.",
+          "Bot does not reply: check the access token, channel config, AI provider/API key, and server logs.",
+          "401 or 403 from Meta: token may be expired, missing permission, blocked by app mode/review, or tied to the wrong account/page.",
+          "Facebook Page ID is empty: acceptable if the Page Access Token works with /me/messages.",
+          "Instagram token does not work: confirm it is from the Instagram API with Instagram Login / Direct Messaging flow, not Basic Display API.",
+          "If any token is exposed, rotate or revoke it in Meta Developer Dashboard and update CSKH-SALON Settings.",
+        ],
+      },
+      {
+        title: "14. When to open the official Meta docs",
+        items: [
+          "Open Messenger Platform docs when creating/configuring the Facebook Messenger product.",
+          "Open Messenger Webhooks docs when choosing webhook fields/events and verifying callback behavior.",
+          "Open Messenger Send API docs when debugging Facebook outbound replies.",
+          "Open Instagram Platform docs when checking account eligibility and Instagram API requirements.",
+          "Open Instagram API with Instagram Login docs when generating or validating Instagram access tokens.",
+          "Open Graph API Webhooks docs when Meta changes webhook dashboard screens or verification wording.",
+        ],
+      },
+    ],
+    links: [
+      {
+        label: "Meta for Developers Apps",
+        url: "https://developers.facebook.com/apps/",
+      },
+      {
+        label: "Graph API Webhooks",
+        url: "https://developers.facebook.com/docs/graph-api/webhooks",
+      },
+      {
+        label: "Messenger Platform",
+        url: "https://developers.facebook.com/docs/messenger-platform",
+      },
+      {
+        label: "Messenger Webhooks",
+        url: "https://developers.facebook.com/docs/messenger-platform/webhooks",
+      },
+      {
+        label: "Messenger Send API",
+        url: "https://developers.facebook.com/docs/messenger-platform/send-messages",
+      },
+      {
+        label: "Instagram Platform",
+        url: "https://developers.facebook.com/docs/instagram-platform",
+      },
+      {
+        label: "Instagram API with Instagram Login",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login",
+      },
+      {
+        label: "Instagram API Get Started",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started",
+      },
+      {
+        label: "Business Login for Instagram",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login",
+      },
+    ],
+    endpoints: [],
+  },
+  {
+    id: "meta-shared-webhook",
+    name: "Meta Shared Webhook",
+    icon: Webhook,
+    notes: [
+      "Scope: this section is the API reference for the shared Meta callback. For key/token setup steps, start from Meta Setup Guide.",
+      "Callback URL: Facebook Messenger and Instagram Direct Messaging share <APP_ORIGIN>/api/webhooks/meta.",
+      "Shared flow: Meta webhook -> parse payload -> detect platform -> resolveCustomer -> find/create Conversation -> chat(conversation.id, text) -> send reply.",
+      "Platform detection: Facebook uses object=page; Instagram uses object=instagram.",
+      "Supported events: currently supported = text messages. Ignored = echo, non-text, delivery/read receipts, and reactions.",
+      "Security: x-hub-signature-256 is verified when META_APP_SECRET or a channel appSecret is configured.",
+      "Webhook verification: GET verification uses hub.mode=subscribe, hub.verify_token, and hub.challenge.",
+      "Try it note: POST Try it uses a Facebook object=page payload only as a runnable sample. Copy Instagram payloads from the Instagram Direct Messaging section.",
+    ],
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/webhooks/meta",
+        description:
+          "Verify the shared Meta webhook callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode is subscribe and hub.verify_token matches Settings > Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as plain text.",
+        queryParams: [
+          {
+            name: "hub.mode",
+            type: "string",
+            required: true,
+            description:
+              "Always use subscribe. Meta sends this value when verifying the webhook callback.",
+            defaultValue: "subscribe",
+          },
+          {
+            name: "hub.verify_token",
+            type: "string",
+            required: true,
+            description: "Webhook verify token from Settings > Facebook/Instagram or META_VERIFY_TOKEN.",
+          },
+          {
+            name: "hub.challenge",
+            type: "string",
+            required: true,
+            description: "Challenge string returned as text when verification succeeds.",
+            defaultValue: "hello123",
+          },
+        ],
+        responseExample: "hello123",
+      },
+      {
+        method: "POST",
+        path: "/api/webhooks/meta",
+        description:
+          "Receive the shared Meta webhook callback. The request body shown here is a real Facebook payload for Try it convenience; see the Facebook Messenger and Instagram Direct Messaging sections for separate platform-specific payload examples.",
+        requestBody: {
+          object: "page",
+          entry: [
+            {
+              messaging: [
+                {
+                  sender: { id: "USER_PSID_TEST" },
+                  recipient: { id: "PAGE_ID_TEST" },
+                  message: { text: "hello facebook" },
+                },
+              ],
+            },
+          ],
+        },
+        responseExample: { ok: true, received: 1 },
+        params: [],
+        headers: [
+          {
+            name: "x-hub-signature-256",
+            type: "header",
+            required: false,
+            description:
+              "Required when META_APP_SECRET or a channel appSecret is configured. Invalid signatures return 401.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "facebook-messenger",
+    name: "Facebook Messenger",
+    icon: MessageSquare,
+    notes: [
+      "Scope: this section documents Facebook channel config APIs and Facebook payload examples. For step-by-step setup and where to paste values, use Meta Setup Guide.",
+      "Required config: Verify Token, Page Access Token, Graph Version v25.0, and optional Page ID/App Secret.",
+      "Page ID lookup, optional: curl \"https://graph.facebook.com/v25.0/me?fields=id,name&access_token=YOUR_FACEBOOK_PAGE_ACCESS_TOKEN\". The id in the response is the Page ID. Do not paste real tokens into shared logs.",
+      "Facebook payload mapping: sender.id -> customer PSID, recipient.id -> Facebook Page ID, customerContact -> facebook:<psid>.",
+      "Security: GET channel responses never return raw pageAccessToken or appSecret. Blank or masked secret fields preserve the existing secret on save.",
+      "Local POST test: curl -X POST \"http://localhost:3000/api/webhooks/meta\" -H \"Content-Type: application/json\" -d \"{\\\"object\\\":\\\"page\\\",\\\"entry\\\":[{\\\"messaging\\\":[{\\\"sender\\\":{\\\"id\\\":\\\"USER_PSID_TEST\\\"},\\\"recipient\\\":{\\\"id\\\":\\\"PAGE_ID_TEST\\\"},\\\"message\\\":{\\\"text\\\":\\\"hello facebook\\\"}}]}]}\"",
+    ],
+    examples: [
+      {
+        label: "Facebook Webhook Payload",
+        data: {
+          object: "page",
+          entry: [
+            {
+              messaging: [
+                {
+                  sender: { id: "USER_PSID" },
+                  recipient: { id: "PAGE_ID" },
+                  message: { text: "Hello from Facebook" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        label: "Facebook Channel Config",
+        data: {
+          type: "facebook",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            pageAccessToken: "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN",
+            pageId: "OPTIONAL_PAGE_ID",
+            graphVersion: "v25.0",
+            appSecret: "YOUR_META_APP_SECRET",
+          },
+        },
+      },
+    ],
+    links: [
+      {
+        label: "Messenger Platform",
+        url: "https://developers.facebook.com/docs/messenger-platform",
+      },
+      {
+        label: "Messenger Webhooks",
+        url: "https://developers.facebook.com/docs/messenger-platform/webhooks",
+      },
+      {
+        label: "Messenger Send API",
+        url: "https://developers.facebook.com/docs/messenger-platform/send-messages",
+      },
+      {
+        label: "Graph API Webhooks",
+        url: "https://developers.facebook.com/docs/graph-api/webhooks",
+      },
+    ],
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/channels/:type",
+        description:
+          "Get sanitized Facebook channel config. Use type=facebook. Raw pageAccessToken and appSecret are never returned.",
+        params: [
+          {
+            name: "type",
+            type: "string",
+            required: true,
+            description: "Use facebook.",
+            defaultValue: "facebook",
+          },
+        ],
+        responseExample: {
+          type: "facebook",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            pageId: "OPTIONAL_PAGE_ID",
+            graphVersion: "v25.0",
+            hasPageAccessToken: true,
+            hasAppSecret: true,
+          },
+        },
+      },
+      {
+        method: "POST",
+        path: "/api/channels",
+        description:
+          "Create or update Facebook channel config. Blank or masked pageAccessToken/appSecret values preserve existing secrets.",
+        requestBody: {
+          type: "facebook",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            pageAccessToken: "YOUR_FACEBOOK_PAGE_ACCESS_TOKEN",
+            pageId: "OPTIONAL_PAGE_ID",
+            graphVersion: "v25.0",
+            appSecret: "YOUR_META_APP_SECRET",
+          },
+        },
+        responseExample: {
+          type: "facebook",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            pageId: "OPTIONAL_PAGE_ID",
+            graphVersion: "v25.0",
+            hasPageAccessToken: true,
+            hasAppSecret: true,
+          },
+        },
+      },
+    ],
+  },
+  {
+    id: "instagram-direct",
+    name: "Instagram Direct Messaging",
+    icon: MessagesSquare,
+    notes: [
+      "Scope: this section documents Instagram channel config APIs and Instagram payload examples. For step-by-step setup and where to paste values, use Meta Setup Guide.",
+      "Required config: Verify Token, Instagram Access Token, Graph Version v25.0, and optional Business Account ID/App Secret.",
+      "Important: this integration targets Instagram Direct Messaging API / Instagram API with Instagram Login.",
+      "Do not use Instagram Basic Display API for chatbot messaging.",
+      "Do not use a Facebook Page Access Token as the Instagram Access Token for the direct Instagram flow.",
+      "Business Account ID: optional metadata in CSKH-SALON. The webhook payload recipient.id can help confirm which Instagram business/account received the message.",
+      "Instagram payload mapping: sender.id -> Instagram sender id, recipient.id -> Instagram business/account id, customerContact -> instagram:<sender_id>.",
+      "Security: GET channel responses never return raw accessToken or appSecret. Blank or masked secret fields preserve the existing secret on save.",
+      "Local POST test: curl -X POST \"http://localhost:3000/api/webhooks/meta\" -H \"Content-Type: application/json\" -d \"{\\\"object\\\":\\\"instagram\\\",\\\"entry\\\":[{\\\"messaging\\\":[{\\\"sender\\\":{\\\"id\\\":\\\"IG_SENDER_TEST\\\"},\\\"recipient\\\":{\\\"id\\\":\\\"IG_BUSINESS_TEST\\\"},\\\"message\\\":{\\\"text\\\":\\\"hello instagram\\\"}}]}]}\"",
+    ],
+    examples: [
+      {
+        label: "Instagram Webhook Payload",
+        data: {
+          object: "instagram",
+          entry: [
+            {
+              messaging: [
+                {
+                  sender: { id: "IG_SENDER_ID" },
+                  recipient: { id: "IG_BUSINESS_ID" },
+                  message: { text: "Hello from Instagram" },
+                },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        label: "Instagram Channel Config",
+        data: {
+          type: "instagram",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            accessToken: "YOUR_INSTAGRAM_ACCESS_TOKEN",
+            businessAccountId: "OPTIONAL_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+            graphVersion: "v25.0",
+            appSecret: "YOUR_META_APP_SECRET",
+          },
+        },
+      },
+    ],
+    links: [
+      {
+        label: "Instagram Platform",
+        url: "https://developers.facebook.com/docs/instagram-platform",
+      },
+      {
+        label: "Instagram API with Instagram Login",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login",
+      },
+      {
+        label: "Business Login for Instagram",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login",
+      },
+      {
+        label: "Instagram API Get Started",
+        url: "https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started",
+      },
+    ],
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/channels/:type",
+        description:
+          "Get sanitized Instagram channel config. Use type=instagram. Raw accessToken and appSecret are never returned.",
+        params: [
+          {
+            name: "type",
+            type: "string",
+            required: true,
+            description: "Use instagram.",
+            defaultValue: "instagram",
+          },
+        ],
+        responseExample: {
+          type: "instagram",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            businessAccountId: "OPTIONAL_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+            graphVersion: "v25.0",
+            hasAccessToken: true,
+            hasAppSecret: true,
+          },
+        },
+      },
+      {
+        method: "PUT",
+        path: "/api/channels/:type",
+        description:
+          "Update Instagram channel config. Blank or masked accessToken/appSecret values preserve existing secrets.",
+        params: [
+          {
+            name: "type",
+            type: "string",
+            required: true,
+            description: "Use instagram.",
+            defaultValue: "instagram",
+          },
+        ],
+        requestBody: {
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            accessToken: "YOUR_INSTAGRAM_ACCESS_TOKEN",
+            businessAccountId: "OPTIONAL_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+            graphVersion: "v25.0",
+            appSecret: "YOUR_META_APP_SECRET",
+          },
+        },
+        responseExample: {
+          type: "instagram",
+          isActive: true,
+          config: {
+            verifyToken: "my-verify-token",
+            businessAccountId: "OPTIONAL_INSTAGRAM_BUSINESS_ACCOUNT_ID",
+            graphVersion: "v25.0",
+            hasAccessToken: true,
+            hasAppSecret: true,
+          },
+        },
+      },
+    ],
+  },
+  {
     id: "export",
     name: "Export",
     icon: Download,
@@ -544,10 +1106,27 @@ function TryItPanel({ endpoint }: { endpoint: Endpoint }) {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<string | null>(null);
   const [responseStatus, setResponseStatus] = useState<number | null>(null);
-  const [paramValues, setParamValues] = useState<Record<string, string>>({});
+  const allParams = useMemo(
+    () => [...(endpoint.params || []), ...(endpoint.queryParams || [])],
+    [endpoint.params, endpoint.queryParams]
+  );
+  const getDefaultParamValues = useCallback(() => {
+    return allParams.reduce<Record<string, string>>((values, param) => {
+      if (param.defaultValue) values[param.name] = param.defaultValue;
+      return values;
+    }, {});
+  }, [allParams]);
+  const [paramValues, setParamValues] = useState<Record<string, string>>(getDefaultParamValues);
   const [bodyText, setBodyText] = useState(
     endpoint.requestBody ? JSON.stringify(endpoint.requestBody, null, 2) : ""
   );
+
+  useEffect(() => {
+    setParamValues(getDefaultParamValues());
+    setBodyText(endpoint.requestBody ? JSON.stringify(endpoint.requestBody, null, 2) : "");
+    setResponse(null);
+    setResponseStatus(null);
+  }, [endpoint, getDefaultParamValues]);
 
   const handleSend = useCallback(async () => {
     setLoading(true);
@@ -600,8 +1179,6 @@ function TryItPanel({ endpoint }: { endpoint: Endpoint }) {
       setLoading(false);
     }
   }, [endpoint, paramValues, bodyText]);
-
-  const allParams = [...(endpoint.params || []), ...(endpoint.queryParams || [])];
 
   return (
     <div className="mt-4 border border-owly-border rounded-lg overflow-hidden">
@@ -714,7 +1291,8 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
       {/* Parameters table */}
       {((endpoint.params && endpoint.params.length > 0) ||
-        (endpoint.queryParams && endpoint.queryParams.length > 0)) && (
+        (endpoint.queryParams && endpoint.queryParams.length > 0) ||
+        (endpoint.headers && endpoint.headers.length > 0)) && (
         <div className="mt-4">
           <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-2">
             Parameters
@@ -738,7 +1316,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
                 </tr>
               </thead>
               <tbody>
-                {[...(endpoint.params || []), ...(endpoint.queryParams || [])].map((p) => (
+                {[...(endpoint.params || []), ...(endpoint.queryParams || []), ...(endpoint.headers || [])].map((p) => (
                   <tr key={p.name} className="border-t border-owly-border">
                     <td className="px-4 py-2 font-mono text-owly-text font-medium">{p.name}</td>
                     <td className="px-4 py-2 text-owly-text-light">{p.type}</td>
@@ -776,6 +1354,20 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
   );
 }
 
+function GuideNote({ note }: { note: string }) {
+  const separatorIndex = note.indexOf(":");
+  const hasPrefix = separatorIndex > 0 && separatorIndex <= 48;
+
+  if (!hasPrefix) return <span>{note}</span>;
+
+  return (
+    <span>
+      <span className="font-medium text-owly-text">{note.slice(0, separatorIndex)}:</span>
+      {note.slice(separatorIndex + 1)}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
@@ -809,7 +1401,9 @@ export default function ApiDocsPage() {
                 >
                   <Icon className="h-4 w-4 flex-shrink-0" />
                   {section.name}
-                  <span className="ml-auto text-xs opacity-70">{section.endpoints.length}</span>
+                  <span className="ml-auto text-xs opacity-70">
+                    {section.endpoints.length || (section.guideGroups ? "Guide" : 0)}
+                  </span>
                 </button>
               );
             })}
@@ -879,13 +1473,107 @@ export default function ApiDocsPage() {
               <div>
                 <h3 className="text-lg font-semibold text-owly-text">{currentSection.name}</h3>
                 <p className="text-sm text-owly-text-light">
-                  {currentSection.endpoints.length} endpoint
-                  {currentSection.endpoints.length !== 1 ? "s" : ""}
+                  {currentSection.endpoints.length > 0
+                    ? `${currentSection.endpoints.length} endpoint${
+                        currentSection.endpoints.length !== 1 ? "s" : ""
+                      }`
+                    : "Integration guide"}
                 </p>
               </div>
             </div>
 
             {/* Endpoints */}
+            {(currentSection.notes ||
+              currentSection.guideGroups ||
+              currentSection.examples ||
+              currentSection.links) && (
+              <div className="border border-owly-border rounded-xl bg-owly-surface p-6 transition-theme space-y-4">
+                {currentSection.notes && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-2">
+                      Notes
+                    </h4>
+                    <ul className="space-y-2 text-sm text-owly-text-light leading-relaxed">
+                      {currentSection.notes.map((note) => (
+                        <li key={note} className="flex gap-2">
+                          <span className="mt-2 h-1.5 w-1.5 rounded-full bg-owly-primary flex-shrink-0" />
+                          <GuideNote note={note} />
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {currentSection.guideGroups && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-3">
+                      Integration Guide
+                    </h4>
+                    <div className="grid grid-cols-1 gap-4">
+                      {currentSection.guideGroups.map((group) => (
+                        <div
+                          key={group.title}
+                          className="rounded-lg border border-owly-border bg-owly-bg/50 p-4"
+                        >
+                          <h5 className="text-sm font-semibold text-owly-text mb-3">
+                            {group.title}
+                          </h5>
+                          <ol className="space-y-2 text-sm text-owly-text-light leading-relaxed">
+                            {group.items.map((item, index) => (
+                              <li key={item} className="flex gap-3">
+                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-owly-primary-50 text-xs font-semibold text-owly-primary">
+                                  {index + 1}
+                                </span>
+                                <GuideNote note={item} />
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {currentSection.examples && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-2">
+                      Examples
+                    </h4>
+                    <div className="space-y-4">
+                      {currentSection.examples.map((example) => (
+                        <CodeBlock
+                          key={example.label}
+                          data={example.data}
+                          label={example.label}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {currentSection.links && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-2">
+                      Official Meta Docs
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {currentSection.links.map((link) => (
+                        <a
+                          key={link.url}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm text-owly-primary hover:text-owly-primary-dark hover:underline transition-colors"
+                        >
+                          {link.label}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-6">
               {currentSection.endpoints.map((ep, i) => (
                 <EndpointCard key={`${ep.method}-${ep.path}-${i}`} endpoint={ep} />
