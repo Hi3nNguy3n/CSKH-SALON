@@ -13,10 +13,15 @@ import { logger } from "@/lib/logger";
 import {
   DEFAULT_GEMINI_MODEL,
   GEMINI_PROVIDER,
+  getGeminiChatModelFallbackChain,
   normalizeAIModel,
   normalizeAIProvider,
 } from "./catalog";
-import { createGeminiClient } from "./provider";
+import {
+  createGeminiClient,
+  shouldFallbackGeminiModel,
+  shouldStopGeminiFallback,
+} from "./provider";
 import { searchKnowledgeBase } from "./semantic-search";
 import type { AIMessage, AIConfig, ConversationContext, KnowledgeItem } from "./types";
 
@@ -369,69 +374,80 @@ async function callAI(
   }
 
   const client = createGeminiClient(config.apiKey);
+  const modelChain = getGeminiChatModelFallbackChain(config.model);
   const requestPayload = {
-    model: config.model,
     messages: messages as OpenAI.ChatCompletionMessageParam[],
     max_tokens: config.maxTokens,
     temperature: config.temperature,
   };
 
-  const delay = (ms: number) =>
-    new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
-
-  const shouldRetry = (error: unknown) => {
-    const message =
-      error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-
-    return (
-      message.includes("429") ||
-      message.includes("rate limit") ||
-      message.includes("quota") ||
-      message.includes("timeout") ||
-      message.includes("overloaded") ||
-      message.includes("503") ||
-      message.includes("500")
-    );
-  };
-
   let response: OpenAI.Chat.Completions.ChatCompletion | null = null;
   let lastError: unknown;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+
+  for (const [modelIndex, model] of modelChain.entries()) {
     try {
       response = await client.chat.completions.create({
         ...requestPayload,
+        model,
         tools: owlyTools as OpenAI.ChatCompletionTool[],
       });
+      if (model !== config.model) {
+        logger.warn("Gemini chat fallback model with tools succeeded", {
+          conversationId,
+          configuredModel: config.model,
+          model,
+        });
+      }
       break;
     } catch (error) {
       lastError = error;
       logger.error("Gemini chat completion with tools failed:", error, {
         conversationId,
-        attempt: attempt + 1,
+        model,
+        attempt: modelIndex + 1,
       });
 
-      if (!shouldRetry(error) || attempt === 1) {
+      if (shouldStopGeminiFallback(error) || !shouldFallbackGeminiModel(error)) {
         break;
       }
-
-      await delay(1200);
     }
   }
 
   if (!response) {
-    try {
-      response = await client.chat.completions.create(requestPayload);
-      logger.warn("Gemini fallback without tools succeeded", { conversationId });
-    } catch (fallbackError) {
-      logger.error("Gemini fallback without tools failed:", fallbackError, {
-        conversationId,
-        previousError:
-          lastError instanceof Error ? lastError.message : String(lastError ?? ""),
-      });
-      return "Hiện tôi chưa thể xử lý yêu cầu này. Vui lòng thử lại sau ít phút, hoặc tôi có thể chuyển bạn tới nhân viên hỗ trợ.";
+    for (const [modelIndex, model] of modelChain.entries()) {
+      try {
+        response = await client.chat.completions.create({
+          ...requestPayload,
+          model,
+        });
+        logger.warn("Gemini fallback without tools succeeded", {
+          conversationId,
+          configuredModel: config.model,
+          model,
+        });
+        break;
+      } catch (fallbackError) {
+        lastError = fallbackError;
+        logger.error("Gemini fallback without tools failed:", fallbackError, {
+          conversationId,
+          model,
+          attempt: modelIndex + 1,
+        });
+
+        if (shouldStopGeminiFallback(fallbackError) || !shouldFallbackGeminiModel(fallbackError)) {
+          break;
+        }
+      }
     }
+  }
+
+  if (!response) {
+    logger.error("All Gemini chat fallback models failed", lastError, {
+      conversationId,
+      configuredModel: config.model,
+      fallbackModels: modelChain.join(", "),
+    });
+    return "Hiện tôi chưa thể xử lý yêu cầu này. Vui lòng thử lại sau ít phút, hoặc tôi có thể chuyển bạn tới nhân viên hỗ trợ.";
   }
 
   const choice = response.choices[0];

@@ -3,8 +3,15 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 import WordExtractor from "word-extractor";
 import * as XLSX from "xlsx";
-import { DEFAULT_GEMINI_DOCUMENT_MODEL, DEFAULT_GEMINI_MODEL } from "@/lib/ai/catalog";
-import { generateGeminiDocumentJson } from "@/lib/ai/provider";
+import {
+  DEFAULT_GEMINI_DOCUMENT_MODEL,
+  getGeminiDocumentModelFallbackChain,
+} from "@/lib/ai/catalog";
+import {
+  generateGeminiDocumentJson,
+  shouldFallbackGeminiModel,
+  shouldStopGeminiFallback,
+} from "@/lib/ai/provider";
 import type { ImportedKnowledgeDocument, ImportedKnowledgeSection } from "./import";
 
 const MAX_GEMINI_TEXT_CONTEXT_CHARS = 45000;
@@ -202,35 +209,36 @@ async function generateKnowledgeJson(
   parts: GeminiContentPart[],
   warnings: string[]
 ): Promise<{ jsonText: string; model: string }> {
-  try {
-    return {
-      jsonText: await generateGeminiDocumentJson(
-        prompt,
-        apiKey,
-        parts,
-        DEFAULT_GEMINI_DOCUMENT_MODEL
-      ),
-      model: DEFAULT_GEMINI_DOCUMENT_MODEL,
-    };
-  } catch (error) {
-    const message = errorMessage(error);
-    if (!shouldRetryWithDefaultModel(message)) {
-      throw error;
+  const modelChain = getGeminiDocumentModelFallbackChain(DEFAULT_GEMINI_DOCUMENT_MODEL);
+  let lastError: unknown;
+
+  for (const [index, model] of modelChain.entries()) {
+    try {
+      const jsonText = await generateGeminiDocumentJson(prompt, apiKey, parts, model);
+      if (index > 0) {
+        warnings.push(
+          `Model ${modelChain[0]} không dùng được cho lần đọc này, đã thử lại thành công bằng ${model}.`
+        );
+      }
+      return { jsonText, model };
+    } catch (error) {
+      lastError = error;
+      if (shouldStopGeminiFallback(error) || !shouldFallbackGeminiModel(error)) {
+        throw error;
+      }
+
+      const nextModel = modelChain[index + 1];
+      if (nextModel) {
+        warnings.push(
+          `Model ${model} không dùng được cho lần đọc này (${errorMessage(error)}), thử tiếp ${nextModel}.`
+        );
+      }
     }
-
-    warnings.push(
-      `Model ${DEFAULT_GEMINI_DOCUMENT_MODEL} không dùng được cho lần đọc này, đã thử lại bằng ${DEFAULT_GEMINI_MODEL}.`
-    );
-
-    return {
-      jsonText: await generateGeminiDocumentJson(prompt, apiKey, parts, DEFAULT_GEMINI_MODEL),
-      model: DEFAULT_GEMINI_MODEL,
-    };
   }
-}
 
-function shouldRetryWithDefaultModel(message: string): boolean {
-  return /404|not found|not supported|unavailable|overloaded|503|model/i.test(message);
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Tất cả Gemini document import fallback models đều thất bại.");
 }
 
 function errorMessage(error: unknown): string {

@@ -6,9 +6,13 @@ const { mockGenerateGeminiDocumentJson } = vi.hoisted(() => ({
   mockGenerateGeminiDocumentJson: vi.fn(),
 }));
 
-vi.mock("@/lib/ai/provider", () => ({
-  generateGeminiDocumentJson: mockGenerateGeminiDocumentJson,
-}));
+vi.mock("@/lib/ai/provider", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai/provider")>();
+  return {
+    ...actual,
+    generateGeminiDocumentJson: mockGenerateGeminiDocumentJson,
+  };
+});
 
 async function createDocxBuffer() {
   const zip = new JSZip();
@@ -136,6 +140,38 @@ describe("Gemini knowledge import", () => {
         }),
       ])
     );
+  });
+
+  it("falls back to another Gemini document model when the first model is unavailable", async () => {
+    mockGenerateGeminiDocumentJson
+      .mockRejectedValueOnce(
+        new Error("Gemini document import error (gemini-2.5-pro, HTTP 503): overloaded")
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          chunks: [
+            {
+              title: "Adapter 12V 5A",
+              content: "Sản phẩm: Adapter 12V 5A\nGiá: 125.000",
+              type: "price",
+              confidence: 0.9,
+            },
+          ],
+        })
+      );
+
+    const imported = await importKnowledgeDocumentWithGemini(
+      "bang-gia.md",
+      "text/markdown",
+      Buffer.from("Adapter 12V 5A\nGiá: 125.000"),
+      "gemini-key"
+    );
+
+    expect(imported.sections[0].title).toBe("Adapter 12V 5A");
+    expect(imported.warnings.join("\n")).toContain("gemini-2.5-pro");
+    expect(imported.warnings.join("\n")).toContain("gemini-3.5-flash");
+    expect(mockGenerateGeminiDocumentJson.mock.calls[0][3]).toBe("gemini-2.5-pro");
+    expect(mockGenerateGeminiDocumentJson.mock.calls[1][3]).toBe("gemini-3.5-flash");
   });
 
   it("warns and lowers confidence when Gemini output misses source prices", async () => {

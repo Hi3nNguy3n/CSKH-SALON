@@ -114,6 +114,31 @@ describe("AI Engine", () => {
     );
   });
 
+  it("should try fallback Gemini chat models when configured model is rate limited", async () => {
+    mockOpenAICreateFn
+      .mockRejectedValueOnce(new Error("429 status code (no body)"))
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            finish_reason: "stop",
+            message: { content: "Dạ LED1000 có thể hỗ trợ bạn." },
+          },
+        ],
+      });
+
+    const { chat } = await import("@/lib/ai/engine");
+    const response = await chat("conv-1", "hello");
+
+    expect(response).toBe("Dạ LED1000 có thể hỗ trợ bạn.");
+    expect(mockOpenAICreateFn).toHaveBeenCalledTimes(2);
+    expect(mockOpenAICreateFn.mock.calls[0][0]).toEqual(
+      expect.objectContaining({ model: "gemini-2.5-flash" })
+    );
+    expect(mockOpenAICreateFn.mock.calls[1][0]).toEqual(
+      expect.objectContaining({ model: "gemini-3.5-flash" })
+    );
+  });
+
   it("should save user and assistant messages", async () => {
     mockOpenAICreateFn.mockResolvedValue({
       choices: [

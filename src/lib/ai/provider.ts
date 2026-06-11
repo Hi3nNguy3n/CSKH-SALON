@@ -169,6 +169,38 @@ export async function generateGeminiDocumentJson(
   return text;
 }
 
+export function shouldFallbackGeminiModel(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+
+  return (
+    message.includes("429") ||
+    message.includes("rate limit") ||
+    message.includes("quota") ||
+    message.includes("timeout") ||
+    message.includes("overloaded") ||
+    message.includes("503") ||
+    message.includes("500") ||
+    message.includes("unavailable") ||
+    message.includes("not found") ||
+    message.includes("not supported") ||
+    message.includes("model")
+  );
+}
+
+export function shouldStopGeminiFallback(error: unknown): boolean {
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes("401") ||
+    message.includes("403") ||
+    message.includes("api key") ||
+    message.includes("permission") ||
+    message.includes("unauthorized") ||
+    message.includes("forbidden")
+  );
+}
+
 function extractGeminiErrorMessage(errorText: string): string {
   if (!errorText) return "Không có nội dung lỗi từ Gemini.";
 
