@@ -39,10 +39,10 @@ async function createDocxBuffer() {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">',
       "<w:body>",
-      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>BẢNG GIÁ SALON</w:t></w:r></w:p>',
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>BẢNG GIÁ LED1000</w:t></w:r></w:p>',
       "<w:tbl>",
-      "<w:tr><w:tc><w:p><w:r><w:t>Dịch vụ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Giá</w:t></w:r></w:p></w:tc></w:tr>",
-      "<w:tr><w:tc><w:p><w:r><w:t>Cắt tóc nữ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>350.000</w:t></w:r></w:p></w:tc></w:tr>",
+      "<w:tr><w:tc><w:p><w:r><w:t>Sản phẩm</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Giá</w:t></w:r></w:p></w:tc></w:tr>",
+      "<w:tr><w:tc><w:p><w:r><w:t>Adapter 12V 5A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>125.000</w:t></w:r></w:p></w:tc></w:tr>",
       "</w:tbl>",
       '<w:p><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>',
       "</w:body>",
@@ -73,10 +73,10 @@ async function createDocxBufferWithMergedPriceTable() {
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
       "<w:body>",
-      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>BẢNG GIÁ NHUỘM</w:t></w:r></w:p>',
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>BẢNG GIÁ NGUỒN LED</w:t></w:r></w:p>',
       "<w:tbl>",
-      '<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Dịch vụ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>S</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>M</w:t></w:r></w:p></w:tc></w:tr>',
-      "<w:tr><w:tc><w:p><w:r><w:t>Nhuộm tóc</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Hair Color</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>1.050.000</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>1.350.000</w:t></w:r></w:p></w:tc></w:tr>",
+      '<w:tr><w:tc><w:tcPr><w:gridSpan w:val="2"/></w:tcPr><w:p><w:r><w:t>Sản phẩm</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Bán lẻ</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Thi công</w:t></w:r></w:p></w:tc></w:tr>',
+      "<w:tr><w:tc><w:p><w:r><w:t>Nguồn tổ ong 24V 10A</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Power Supply</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>210.000</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>195.000</w:t></w:r></w:p></w:tc></w:tr>",
       "</w:tbl>",
       "</w:body>",
       "</w:document>",
@@ -93,8 +93,8 @@ describe("Gemini knowledge import", () => {
       JSON.stringify({
         chunks: [
           {
-            title: "Cắt tóc nữ",
-            content: "Dịch vụ: Cắt tóc nữ\nGiá: 350.000",
+            title: "Adapter 12V 5A",
+            content: "Sản phẩm: Adapter 12V 5A\nGiá: 125.000",
             type: "price",
             confidence: 0.9,
           },
@@ -117,8 +117,8 @@ describe("Gemini knowledge import", () => {
     expect(imported.warnings[0]).toContain("OpenXML");
     expect(imported.sections[0]).toEqual(
       expect.objectContaining({
-        title: "Cắt tóc nữ",
-        content: "Dịch vụ: Cắt tóc nữ\nGiá: 350.000",
+        title: "Adapter 12V 5A",
+        content: "Sản phẩm: Adapter 12V 5A\nGiá: 125.000",
       })
     );
 
@@ -128,7 +128,7 @@ describe("Gemini knowledge import", () => {
         text: expect.stringContaining("[TABLE 1]"),
       })
     );
-    expect(parts[0].text).toContain("| Cắt tóc nữ | 350.000 |");
+    expect(parts[0].text).toContain("| Adapter 12V 5A | 125.000 |");
     expect(parts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -143,20 +143,20 @@ describe("Gemini knowledge import", () => {
       JSON.stringify({
         chunks: [
           {
-            title: "Giới thiệu salon",
-            content: "Minh Hy Hair luôn tư vấn kỹ trước khi làm tóc để khách hàng an tâm.",
+            title: "Giới thiệu LED1000",
+            content: "LED1000 tư vấn nguồn, LED dây và phụ kiện theo nhu cầu chiếu sáng.",
             type: "intro",
             confidence: 1,
           },
           {
-            title: "Lưu ý dịch vụ Cắt tóc",
-            content: "Miễn phí kiểm tra da đầu, gội, xả tóc sạch 5 – 10 phút trước khi cắt tóc.",
+            title: "Lưu ý chọn nguồn LED",
+            content: "Cần kiểm tra điện áp, công suất và môi trường lắp đặt trước khi chọn nguồn.",
             type: "price",
             confidence: 1,
           },
           {
-            title: "Nhuộm tóc",
-            content: "Dịch vụ: Nhuộm tóc\nGiá S: 1.050.000",
+            title: "Nguồn tổ ong 24V 10A",
+            content: "Sản phẩm: Nguồn tổ ong 24V 10A\nGiá bán lẻ: 210.000",
             type: "price",
             confidence: 1,
           },
@@ -165,7 +165,7 @@ describe("Gemini knowledge import", () => {
     );
 
     const imported = await importKnowledgeDocumentWithGemini(
-      "nhuom.docx",
+      "nguon-led.docx",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       await createDocxBufferWithMergedPriceTable(),
       "gemini-key"
@@ -174,7 +174,7 @@ describe("Gemini knowledge import", () => {
     expect(imported.warnings.some((warning) => warning.includes("Cảnh báo kiểm chứng giá"))).toBe(
       true
     );
-    expect(imported.warnings.join("\n")).toContain("1350000");
+    expect(imported.warnings.join("\n")).toContain("195000");
     expect(imported.sections[0].metadata?.requiresReview).not.toBe(true);
     expect(imported.sections[0].metadata?.parserConfidence).toBe(1);
     expect(imported.sections[0].metadata?.geminiType).toBe("intro");
@@ -185,7 +185,7 @@ describe("Gemini knowledge import", () => {
     expect(imported.sections[2].metadata?.parserConfidence).toBeLessThan(1);
 
     const [, , parts] = mockGenerateGeminiDocumentJson.mock.calls[0];
-    expect(parts[0].text).toContain("| Dịch vụ | Dịch vụ | S | M |");
+    expect(parts[0].text).toContain("| Sản phẩm | Sản phẩm | Bán lẻ | Thi công |");
   });
 
   it("flags suspicious low VND prices without requiring a global missing-price warning", async () => {
@@ -193,8 +193,8 @@ describe("Gemini knowledge import", () => {
       JSON.stringify({
         chunks: [
           {
-            title: "Dịch vụ chăm sóc chuyên biệt",
-            content: "Dịch vụ chăm sóc chuyên biệt L'Oréal Professionnel\nƯu đãi từ 850 VNĐ*",
+            title: "LED dây COB 12V",
+            content: "LED dây COB 12V\nƯu đãi từ 850 VNĐ*",
             type: "promotion",
             confidence: 1,
           },
@@ -205,7 +205,7 @@ describe("Gemini knowledge import", () => {
     const imported = await importKnowledgeDocumentWithGemini(
       "uu-dai.txt",
       "text/plain",
-      Buffer.from("Dịch vụ chăm sóc chuyên biệt L'Oréal Professionnel\nƯu đãi từ 850 VNĐ*"),
+      Buffer.from("LED dây COB 12V\nƯu đãi từ 850 VNĐ*"),
       "gemini-key"
     );
 

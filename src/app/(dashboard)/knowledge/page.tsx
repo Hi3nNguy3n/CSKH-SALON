@@ -1003,7 +1003,7 @@ export default function KnowledgeBasePage() {
                 </div>
                 {importForm.mode === "gemini" && (
                   <p className="mt-2 text-xs text-owly-text-light">
-                    Với file Word nhiều bảng/ảnh như bảng giá salon, nên lưu thành PDF rồi import
+                    Với file Word nhiều bảng/ảnh như bảng giá hoặc catalogue nhiều cột, nên lưu thành PDF rồi import
                     bằng Gemini để giữ bố cục chính xác hơn.
                   </p>
                 )}

@@ -228,9 +228,9 @@ export default function SetupPage() {
     <div className="overflow-hidden rounded-2xl border border-owly-border bg-owly-surface shadow-lg">
       <div className="border-b border-owly-border bg-owly-primary-50 px-8 pb-4 pt-6">
         <div className="mb-5 flex items-center gap-3">
-          <Image src="/salondesk-logo.svg" alt="SalonDesk" width={40} height={40} />
+          <Image src="/linhkienled1000-logo.svg" alt="LED1000 CSKH" width={40} height={40} />
           <div>
-            <h1 className="text-lg font-bold text-owly-text">Thiết lập SalonDesk</h1>
+            <h1 className="text-lg font-bold text-owly-text">Thiết lập LED1000 CSKH</h1>
             <p className="text-xs text-owly-text-light">
               Bước {step + 1} / {STEPS.length}
             </p>
@@ -549,7 +549,7 @@ export default function SetupPage() {
         {step === 4 && (
           <>
             <p className="mb-6 text-sm text-owly-text-light">
-              Không gian làm việc SalonDesk của bạn đã sẵn sàng để bắt đầu vận hành.
+              Không gian làm việc LED1000 CSKH của bạn đã sẵn sàng để bắt đầu vận hành.
             </p>
 
             <div className="mb-6 space-y-3">

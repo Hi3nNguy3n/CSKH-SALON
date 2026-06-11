@@ -22,10 +22,10 @@ interface TestResult {
 }
 
 const samplePrompts = [
-  "Chị muốn nhuộm tóc nâu",
-  "Giá bao nhiêu",
-  "Đặt lịch chiều mai",
-  "Tóc chị hư rồi",
+  "LED1000 bán những nhóm sản phẩm nào?",
+  "Giá adapter 12V 5A bao nhiêu?",
+  "Tôi cần mua nguồn cho LED dây 10m",
+  "Tôi muốn mua đèn cho bảng hiệu",
 ];
 
 export default function TestingPage() {
@@ -281,7 +281,7 @@ export default function TestingPage() {
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 rows={4}
-                placeholder="Ví dụ: Em muốn đặt lịch nhuộm nâu lạnh cho tóc ngang vai vào chiều mai"
+                placeholder="Ví dụ: Tôi cần LED dây ngoài trời chống nước cho bảng hiệu dài 10m"
                 className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-bg text-owly-text focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary resize-none"
               />
               <div className="flex items-center gap-3">

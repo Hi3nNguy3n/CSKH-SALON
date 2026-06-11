@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Hướng dẫn xóa dữ liệu người dùng - SalonDesk",
-  description: "Cách yêu cầu xóa dữ liệu người dùng khỏi SalonDesk.",
+  title: "Hướng dẫn xóa dữ liệu người dùng - LinhKienLed1000",
+  description: "Cách yêu cầu xóa dữ liệu người dùng khỏi LinhKienLed1000.",
 };
 
 export default function DataDeletionPage() {
@@ -16,7 +16,7 @@ export default function DataDeletionPage() {
           <h1 className="text-3xl font-semibold">Hướng dẫn xóa dữ liệu người dùng</h1>
           <p className="text-base leading-7 text-owly-text-light">
             Người dùng có thể yêu cầu xóa dữ liệu liên quan đến hội thoại hoặc
-            thông tin CRM đang được lưu trong SalonDesk.
+            thông tin CRM đang được lưu trong LinhKienLed1000.
           </p>
         </header>
 
@@ -30,7 +30,7 @@ export default function DataDeletionPage() {
             với tiêu đề đề xuất:
           </p>
           <p className="rounded border border-owly-border bg-owly-surface px-4 py-3 font-mono text-sm">
-            Data Deletion Request - SalonDesk
+            Data Deletion Request - LinhKienLed1000
           </p>
         </section>
 
@@ -50,7 +50,7 @@ export default function DataDeletionPage() {
           <h2 className="text-xl font-semibold">Quy trình xử lý</h2>
           <p className="leading-7">
             Sau khi nhận yêu cầu, dữ liệu liên quan sẽ được kiểm tra và xóa nếu
-            còn được lưu trong hệ thống. Salon có thể cần thêm thông tin để xác
+            còn được lưu trong hệ thống. Đội ngũ vận hành có thể cần thêm thông tin để xác
             định đúng hồ sơ hoặc hội thoại cần xóa.
           </p>
         </section>
@@ -58,4 +58,3 @@ export default function DataDeletionPage() {
     </main>
   );
 }
-

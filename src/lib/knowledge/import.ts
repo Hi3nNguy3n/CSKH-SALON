@@ -359,8 +359,7 @@ function isServiceTitleCandidate(line: string): boolean {
     Boolean(line) &&
     !isPriceLine(line) &&
     !isCatalogueHeaderOnly(line) &&
-    !isCatalogueDescriptionLine(line) &&
-    !/^(CUTTING|PERM|STRAIHTEN|STRAIGHTEN|HAIR COLORING|BLEACHING|Treatment system)$/i.test(line)
+    !isCatalogueDescriptionLine(line)
   );
 }
 
@@ -600,7 +599,7 @@ function isKnowledgeTableHeaderCell(cell: string): boolean {
 }
 
 function isPriceTierHeaderCell(cell: string): boolean {
-  return /^(top|senior|junior|stylist|s|m|l|xl|minh hy|quecavali|thợ chính|tho chinh|thợ phụ|tho phu|giá|gia|price|size)/i.test(
+  return /^(giá|gia|price|đơn giá|don gia|giá bán|gia ban|bán lẻ|ban le|bán sỉ|ban si|sỉ|si|lẻ|le|size|kích thước|kich thuoc|quy cách|quy cach|model|mã|ma|sku|điện áp|dien ap|công suất|cong suat)/i.test(
     cell.trim()
   );
 }
@@ -963,12 +962,12 @@ function isCatalogueTitleCandidate(line: string): boolean {
   return (
     line.length <= 90 &&
     !/[→]/.test(line) &&
-    !/^(Free|Wash twice|Hair Creative|Technical Director)/i.test(line)
+    !/^(Free|Technical Director)/i.test(line)
   );
 }
 
 function isCatalogueDescriptionLine(line: string): boolean {
-  return / \+ |^\d+\s*bước|^Gội sạch|^Wash twice|^Cạo lông|^Tóc |^Dành cho|^Để đạt|^Cấp độ/i.test(
+  return / \+ |^\d+\s*bước|^Dành cho|^Để đạt|^Cấp độ/i.test(
     line
   );
 }
@@ -991,14 +990,6 @@ function formatPriceLines(prices: string[], descriptorLines: string[]): string {
     return `Giá Size S: ${prices[0]}\nGiá Size M: ${prices[1]}\nGiá Size L: ${prices[2]}\nGiá Size XL: ${prices[3]}`;
   }
 
-  if (prices.length === 3 && descriptorLines.some((line) => /TOP|SENIOR|JUNIOR/i.test(line))) {
-    return `Giá Top Stylist: ${prices[0]}\nGiá Senior Stylist: ${prices[1]}\nGiá Junior Stylist: ${prices[2]}`;
-  }
-
-  if (prices.length === 2 && descriptorLines.some((line) => /MINH HY|QUECAVALI/i.test(line))) {
-    return `Giá Minh Hy: ${prices[0]}\nGiá Quecavali: ${prices[1]}`;
-  }
-
   return prices.length === 1 ? `Giá: ${prices[0]}` : `Giá: ${prices.join(" | ")}`;
 }
 
@@ -1011,7 +1002,7 @@ function isCatalogueNoise(line: string): boolean {
 }
 
 function isCatalogueHeaderOnly(line: string): boolean {
-  return /^(TOP|SENIOR|JUNIOR|STYLIST|MINH HY|QUECAVALI|S|M|L|XL|ON TOP|Thợ chính|Kinh nghiệm lâu năm|Thợ chính cao cấp|Tài năng mới)$/i.test(
+  return /^(S|M|L|XL|ON TOP)$/i.test(
     line
   );
 }

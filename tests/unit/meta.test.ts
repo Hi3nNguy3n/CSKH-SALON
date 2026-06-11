@@ -33,7 +33,7 @@ describe("Meta channel adapter", () => {
             {
               sender: { id: "psid-1" },
               recipient: { id: "page-1" },
-              message: { mid: "m-1", text: "Hello salon" },
+              message: { mid: "m-1", text: "Hello LED1000" },
             },
           ],
         },
@@ -47,7 +47,7 @@ describe("Meta channel adapter", () => {
       recipientId: "page-1",
       customerContact: "facebook:psid-1",
       customerName: "Facebook User",
-      text: "Hello salon",
+      text: "Hello LED1000",
     });
   });
 
@@ -133,12 +133,12 @@ describe("Meta channel adapter", () => {
   });
 
   it("should keep short Meta text as one chunk", () => {
-    expect(splitMetaText("Hello salon", 20)).toEqual(["Hello salon"]);
+    expect(splitMetaText("Hello LED1000", 20)).toEqual(["Hello LED1000"]);
   });
 
   it("should split long Meta text into chunks under the max length", () => {
     const text = [
-      "First paragraph has useful salon details.",
+      "First paragraph has useful LED1000 details.",
       "Second paragraph has more booking details.",
       "Third paragraph is intentionally longer than the chunk limit and should be split safely.",
     ].join("\n\n");

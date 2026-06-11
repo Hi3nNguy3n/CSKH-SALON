@@ -178,7 +178,7 @@ describe("AI Engine", () => {
     expect(systemMessage.content).toContain("30-day returns allowed");
   });
 
-  it("should build a business-aware non-salon system prompt", async () => {
+  it("should build a LinhKienLed1000-aware system prompt", async () => {
     mockPrisma.settings.findFirst.mockResolvedValue({
       id: "default",
       businessName: "LED1000 / Linh Kiện LED1000",
@@ -210,12 +210,11 @@ describe("AI Engine", () => {
     expect(systemMessage.content).toContain("trợ lý CSKH/tư vấn sản phẩm của LED1000");
     expect(systemMessage.content).toContain("điện áp 5V/12V/24V/48V/220V");
     expect(systemMessage.content).toContain("Không tự bịa giá, tồn kho, bảo hành, khuyến mãi");
-    expect(systemMessage.content).not.toContain("salon tóc");
-    expect(systemMessage.content).not.toContain("stylist");
-    expect(systemMessage.content).not.toContain("độ dài tóc");
+    expect(systemMessage.content).toContain("nguồn điện");
+    expect(systemMessage.content).toContain("LED dây");
   });
 
-  it("should not inject salon-specific customer profile fields into prompt", async () => {
+  it("should inject LinhKienLed1000 customer profile fields into prompt", async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue({
       id: "conv-1",
       channel: "whatsapp",
@@ -232,6 +231,10 @@ describe("AI Engine", () => {
       tags: "VIP",
       profileNotes: "Thường mua LED dây ngoài trời",
       preferences: "Ưu tiên ánh sáng vàng",
+      purchaseContext: "Lắp bảng hiệu ngoài trời",
+      technicalNeeds: "LED dây 12V chống nước",
+      quoteStatus: "yes",
+      previousAdvisor: "Kỹ thuật LED1000",
     });
     mockOpenAICreateFn.mockResolvedValue({
       choices: [
@@ -249,10 +252,9 @@ describe("AI Engine", () => {
     const systemMessage = callArgs.messages[0];
     expect(systemMessage.content).toContain("Thường mua LED dây ngoài trời");
     expect(systemMessage.content).toContain("Ưu tiên ánh sáng vàng");
-    expect(systemMessage.content).not.toContain("Lịch sử làm tóc");
-    expect(systemMessage.content).not.toContain("Tình trạng tóc");
-    expect(systemMessage.content).not.toContain("Tóc đã từng tẩy");
-    expect(systemMessage.content).not.toContain("Stylist cũ");
+    expect(systemMessage.content).toContain("Lắp bảng hiệu ngoài trời");
+    expect(systemMessage.content).toContain("LED dây 12V chống nước");
+    expect(systemMessage.content).toContain("Kỹ thuật LED1000");
   });
 
   it("should handle tool calls and recurse", async () => {

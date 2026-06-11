@@ -168,6 +168,10 @@ async function getCustomerProfileContext(customerId?: string | null): Promise<st
       tags: true,
       profileNotes: true,
       preferences: true,
+      purchaseContext: true,
+      technicalNeeds: true,
+      quoteStatus: true,
+      previousAdvisor: true,
     },
   });
 
@@ -189,6 +193,18 @@ async function getCustomerProfileContext(customerId?: string | null): Promise<st
   }
   if (customer.preferences) {
     profile.push(`- Nhu cầu/sở thích đã lưu: ${customer.preferences}`);
+  }
+  if (customer.purchaseContext) {
+    profile.push(`- Bối cảnh mua hàng/lắp đặt: ${customer.purchaseContext}`);
+  }
+  if (customer.technicalNeeds) {
+    profile.push(`- Thông số kỹ thuật khách quan tâm: ${customer.technicalNeeds}`);
+  }
+  if (customer.quoteStatus && customer.quoteStatus !== "unknown") {
+    profile.push(`- Trạng thái báo giá chính thức: ${customer.quoteStatus}`);
+  }
+  if (customer.previousAdvisor) {
+    profile.push(`- Nhân sự đã tư vấn trước đó: ${customer.previousAdvisor}`);
   }
   if (customer.profileNotes) {
     profile.push(`- Ghi chú hồ sơ: ${customer.profileNotes}`);

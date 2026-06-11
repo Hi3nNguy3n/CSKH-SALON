@@ -76,7 +76,7 @@ const defaultConfig: BusinessHoursData = {
   saturday: "",
   sunday: "",
   offlineMessage:
-    "Salon hiện đang ngoài giờ hỗ trợ. Bên mình sẽ phản hồi bạn trong khung giờ làm việc.",
+    "LED1000 hiện đang ngoài giờ hỗ trợ. Bên mình sẽ phản hồi bạn trong khung giờ làm việc.",
 };
 
 function parseTime(timeRange: string): { start: string; end: string } | null {
@@ -217,7 +217,7 @@ export default function BusinessHoursPage() {
       <div className="flex-1 flex flex-col min-h-0">
         <Header
           title="Giờ làm việc"
-          description="Thiết lập thời gian salon sẵn sàng hỗ trợ khách"
+          description="Thiết lập thời gian LED1000 sẵn sàng hỗ trợ khách"
         />
         <div className="flex-1 p-6">
           <div className="max-w-3xl space-y-6">
@@ -240,7 +240,7 @@ export default function BusinessHoursPage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Header
         title="Giờ làm việc"
-        description="Thiết lập thời gian salon sẵn sàng hỗ trợ khách"
+        description="Thiết lập thời gian LED1000 sẵn sàng hỗ trợ khách"
       />
 
       <div className="flex-1 overflow-y-auto p-6">
@@ -299,7 +299,7 @@ export default function BusinessHoursPage() {
                 </h3>
                 <p className="text-xs text-owly-text-light mt-0.5">
                   Khi bật, khách sẽ thấy trạng thái hỗ trợ và lời nhắn ngoài giờ
-                  làm việc của salon.
+                  làm việc của LED1000.
                 </p>
               </div>
               <button
@@ -435,7 +435,7 @@ export default function BusinessHoursPage() {
               Tin nhắn ngoài giờ
             </label>
             <p className="text-xs text-owly-text-light mb-3">
-              Tin nhắn này sẽ hiển thị cho khách khi salon đang ngoài giờ làm
+              Tin nhắn này sẽ hiển thị cho khách khi LED1000 đang ngoài giờ làm
               việc.
             </p>
             <textarea
@@ -448,7 +448,7 @@ export default function BusinessHoursPage() {
               }
               rows={3}
               className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-surface text-owly-text focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary transition-theme resize-none"
-              placeholder="Nhập nội dung khách sẽ thấy khi salon ngoài giờ..."
+              placeholder="Nhập nội dung khách sẽ thấy khi LED1000 ngoài giờ..."
             />
           </div>
 

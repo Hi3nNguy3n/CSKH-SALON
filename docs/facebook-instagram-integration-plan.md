@@ -6,7 +6,7 @@ Ngay 2026-05-31. Tai lieu nay chi la bao cao khao sat va ke hoach tich hop. Chua
 
 ### Tong quan repo
 
-- Repo la ung dung CSKH-SALON cho Salon Toc Minh Hy Hair, dung Next.js App Router, TypeScript, Prisma/PostgreSQL, dashboard CRM va bot AI/RAG.
+- Repo la ung dung LinhKienLed1000 cho CSKH LED1000, dung Next.js App Router, TypeScript, Prisma/PostgreSQL, dashboard CRM va bot AI/RAG.
 - `README.md` mo ta muc tieu chinh la CRM + bot AI cham soc khach hang da kenh, hien nhan manh WhatsApp va Email.
 - `package.json` dang dung `next@16.2.2`, `react@19.2.4`, `prisma@7.6.0`, `vitest`, `whatsapp-web.js`, `twilio`, `nodemailer`, `openai`. README badge con ghi Next.js 14, nen khi code can theo `node_modules/next/dist/docs/` nhu `AGENTS.md` yeu cau.
 - AI/RAG tap trung o `src/lib/ai/engine.ts`.
@@ -444,4 +444,3 @@ Huong tich hop an toan nhat la them Meta nhu mot external channel moi:
 - Can public allowlist webhook trong `src/proxy.ts`.
 
 Chi nen bat dau code khi co lenh rieng: "bat dau code phase 1".
-

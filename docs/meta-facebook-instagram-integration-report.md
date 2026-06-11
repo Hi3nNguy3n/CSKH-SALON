@@ -2,7 +2,7 @@
 
 ## 1. Tong quan
 
-Du an CSKH-SALON da tich hop them 2 kenh moi:
+Du an LinhKienLed1000 da tich hop them 2 kenh moi:
 
 ```txt
 Facebook Messenger
@@ -14,7 +14,7 @@ Muc tieu cua integration:
 ```txt
 Khach nhan Facebook Page hoac Instagram Business Account
 -> Meta webhook
--> CSKH-SALON
+-> LinhKienLed1000
 -> tao/tim Customer + Conversation
 -> goi AI/RAG qua chat(conversation.id, text)
 -> gui phan hoi lai nen tang tuong ung
@@ -483,4 +483,4 @@ Chua support:
 
 ## 17. Tom tat
 
-Facebook Messenger va Instagram Direct Messaging API da duoc tich hop thanh cong vao CSKH-SALON nhu hai external channels moi. He thong giu nguyen AI/RAG core, dung chung webhook `/api/webhooks/meta`, luu conversation/message/customer theo channel rieng, co Settings UI de cau hinh, da xu ly secret masking/preserve, va da bo sung hardening co ban gom timeout, retry, split message, safe logging va signature verification. Integration hien san sang cho demo/dev va co nen tang tot de tien toi production sau khi bo sung queue/background worker neu traffic tang.
+Facebook Messenger va Instagram Direct Messaging API da duoc tich hop thanh cong vao LinhKienLed1000 nhu hai external channels moi. He thong giu nguyen AI/RAG core, dung chung webhook `/api/webhooks/meta`, luu conversation/message/customer theo channel rieng, co Settings UI de cau hinh, da xu ly secret masking/preserve, va da bo sung hardening co ban gom timeout, retry, split message, safe logging va signature verification. Integration hien san sang cho demo/dev va co nen tang tot de tien toi production sau khi bo sung queue/background worker neu traffic tang.

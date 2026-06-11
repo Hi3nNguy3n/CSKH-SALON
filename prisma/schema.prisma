@@ -9,9 +9,9 @@ datasource db {
 
 model Settings {
   id               String   @id @default("default")
-  businessName     String   @default("Luna Women's Hair Studio")
-  businessDesc     String   @default("Salon tóc nữ chuyên cắt, uốn, nhuộm, phục hồi tóc, chăm sóc da đầu và tạo kiểu theo lịch hẹn.")
-  welcomeMessage   String   @default("Xin chào! Chào mừng bạn đến với Luna Women's Hair Studio. Bạn cần tư vấn bảng giá, tình trạng tóc hay đặt lịch làm tóc?")
+  businessName     String   @default("Linh Kiện LED1000")
+  businessDesc     String   @default("Linh Kiện LED1000 chuyên đèn LED, nguồn điện, linh kiện LED, phụ kiện chiếu sáng và đèn trang trí.")
+  welcomeMessage   String   @default("Xin chào! Linh Kiện LED1000 có thể hỗ trợ bạn về đèn LED, nguồn điện, phụ kiện chiếu sáng, bảng giá hoặc thông số sản phẩm.")
   tone             String   @default("friendly")
   language         String   @default("vi")
   aiProvider       String   @default("gemini")
@@ -312,11 +312,11 @@ model Customer {
   lastContact     DateTime       @default(now())
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
-  bleachHistory   String         @default("unknown")
-  hairCondition   String         @default("")
-  hairHistory     String         @default("")
+  quoteStatus     String         @default("unknown")
+  technicalNeeds  String         @default("")
+  purchaseContext String         @default("")
   preferences     String         @default("")
-  previousStylist String         @default("")
+  previousAdvisor String         @default("")
   profileNotes    String         @default("")
   conversations   Conversation[]
   notes           CustomerNote[]
@@ -363,7 +363,7 @@ model BusinessHours {
   friday           String  @default("09:00-18:00")
   saturday         String  @default("")
   sunday           String  @default("")
-  offlineMessage   String  @default("Salon hiện đang ngoài giờ làm việc. Chúng tôi sẽ phản hồi bạn trong khung giờ hoạt động sớm nhất.")
+  offlineMessage   String  @default("Linh Kiện LED1000 hiện đang ngoài giờ làm việc. Chúng tôi sẽ phản hồi bạn trong khung giờ hoạt động sớm nhất.")
   lastCustomerTime String  @default("17:00")
 }
 

@@ -204,7 +204,7 @@ describe("AI Tools", () => {
       expect(result.message).toContain("No previous conversations");
     });
 
-    it("should return generic customer profile fields without salon-specific hair fields", async () => {
+    it("should return LinhKienLed1000 customer profile fields", async () => {
       mockPrisma.customer.findFirst.mockResolvedValue({
         name: "Lan",
         phone: "0909003082",
@@ -213,6 +213,10 @@ describe("AI Tools", () => {
         tags: "VIP",
         profileNotes: "Hay mua LED dây ngoài trời",
         preferences: "Ánh sáng vàng",
+        purchaseContext: "Lắp bảng hiệu ngoài trời",
+        technicalNeeds: "LED dây 12V chống nước, nguồn dự phòng 20%",
+        quoteStatus: "yes",
+        previousAdvisor: "Kỹ thuật LED1000",
       });
       mockPrisma.conversation.findMany.mockResolvedValue([]);
 
@@ -229,11 +233,11 @@ describe("AI Tools", () => {
         tags: "VIP",
         profileNotes: "Hay mua LED dây ngoài trời",
         preferences: "Ánh sáng vàng",
+        purchaseContext: "Lắp bảng hiệu ngoài trời",
+        technicalNeeds: "LED dây 12V chống nước, nguồn dự phòng 20%",
+        quoteStatus: "yes",
+        previousAdvisor: "Kỹ thuật LED1000",
       });
-      expect(result.profile).not.toHaveProperty("hairHistory");
-      expect(result.profile).not.toHaveProperty("hairCondition");
-      expect(result.profile).not.toHaveProperty("bleachHistory");
-      expect(result.profile).not.toHaveProperty("previousStylist");
     });
   });
 

@@ -20,16 +20,16 @@ describe("knowledge import helpers", () => {
   });
 
   it("keeps short text in one chunk", () => {
-    const sections = splitTextIntoSections("FAQ", "Dịch vụ uốn tóc có bảng giá theo size.");
+    const sections = splitTextIntoSections("FAQ", "Nguồn LED 12V có bảng giá theo công suất.");
 
     expect(sections).toHaveLength(1);
-    expect(sections[0].content).toContain("Dịch vụ uốn tóc");
+    expect(sections[0].content).toContain("Nguồn LED 12V");
   });
 
   it("splits long text into bounded chunks with overlap", () => {
     const longText = Array.from(
       { length: 80 },
-      (_, index) => `Câu ${index} nói về bảng giá salon.`
+      (_, index) => `Câu ${index} về LED.`
     ).join(" ");
     const sections = splitTextIntoSections("Bảng giá", longText, {
       maxChars: 300,
@@ -56,8 +56,8 @@ describe("knowledge import helpers", () => {
   it("formats XLSX rows with sheet and header context", async () => {
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([
-      ["Dịch vụ", "Size S", "Size M"],
-      ["Uốn tóc", "500k", "700k"],
+      ["Sản phẩm", "Điện áp", "Giá"],
+      ["LED dây COB", "12V", "85k/m"],
     ]);
     XLSX.utils.book_append_sheet(workbook, sheet, "Bảng giá");
     const buffer = Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
@@ -70,7 +70,7 @@ describe("knowledge import helpers", () => {
 
     expect(imported.detectedType).toBe("xlsx");
     expect(imported.sections[0].content).toContain("Sheet: Bảng giá");
-    expect(imported.sections[0].content).toContain("Dịch vụ: Uốn tóc");
+    expect(imported.sections[0].content).toContain("Sản phẩm: LED dây COB");
     expect(imported.sections[0].metadata?.sheetName).toBe("Bảng giá");
   });
 
@@ -80,17 +80,17 @@ describe("knowledge import helpers", () => {
       "text/plain",
       Buffer.from(
         [
-          "FAQ NHUỘM TÓC",
-          "Câu hỏi: Nhuộm tóc giá bao nhiêu?Trả lời: Dạ nhuộm tóc từ 1.050.000đ ạ.",
-          "Câu hỏi: Tẩy tóc giá bao nhiêu?Trả lời: Dạ tẩy tóc từ 900.000đ ạ.",
+          "FAQ NGUỒN LED",
+          "Câu hỏi: Adapter 12V 5A giá bao nhiêu?Trả lời: Dạ giá cần đối chiếu bảng giá chính thức trước khi báo khách ạ.",
+          "Câu hỏi: Có nguồn 24V không?Trả lời: Dạ có nhóm nguồn LED 24V, cần kiểm tra model và công suất khách cần.",
         ].join("\n")
       )
     );
 
     expect(imported.sections).toHaveLength(2);
-    expect(imported.sections[0].title).toBe("Nhuộm tóc giá bao nhiêu?");
-    expect(imported.sections[0].content).toContain("Nhóm: FAQ NHUỘM TÓC");
-    expect(imported.sections[1].content).toContain("Dạ tẩy tóc");
+    expect(imported.sections[0].title).toBe("Adapter 12V 5A giá bao nhiêu?");
+    expect(imported.sections[0].content).toContain("Nhóm: FAQ NGUỒN LED");
+    expect(imported.sections[1].content).toContain("Dạ có nhóm nguồn LED 24V");
   });
 
   it("accepts common FAQ labels beyond the exact Vietnamese template", async () => {
@@ -100,76 +100,70 @@ describe("knowledge import helpers", () => {
       Buffer.from(
         [
           "General Questions",
-          "Q: Combo gội có cần đặt lịch không?",
-          "A: Nên đặt lịch trước để giữ khung giờ đẹp.",
-          "Hỏi: Có tư vấn màu tóc không?",
-          "Đáp: Dạ có tư vấn trước khi làm dịch vụ.",
+          "Q: LED dây ngoài trời cần chọn loại nào?",
+          "A: Nên chọn loại chống nước và kiểm tra điện áp trước khi mua.",
+          "Hỏi: Có tư vấn nguồn cho LED dây không?",
+          "Đáp: Dạ có tư vấn theo điện áp, chiều dài dây và công suất.",
         ].join("\n")
       )
     );
 
     expect(imported.sections).toHaveLength(2);
-    expect(imported.sections[0].title).toBe("Combo gội có cần đặt lịch không?");
+    expect(imported.sections[0].title).toBe("LED dây ngoài trời cần chọn loại nào?");
     expect(imported.sections[0].metadata?.parserConfidence).toBe(0.95);
-    expect(imported.sections[1].content).toContain("Dạ có tư vấn");
+    expect(imported.sections[1].content).toContain("Dạ có tư vấn theo điện áp");
   });
 
-  it("groups price catalogue lines around service names and prices", async () => {
+  it("groups price catalogue lines around product names and prices", async () => {
     const imported = await importKnowledgeDocument(
       "data.txt",
       "text/plain",
       Buffer.from(
         [
           "BẢNG GIÁ",
-          "CẮT TÓC",
-          "TOP",
-          "STYLIST",
-          "SENIOR",
-          "STYLIST",
-          "JUNIOR",
-          "STYLIST",
-          "CẮT TÓC NỮ",
-          "Women’s Hair Cut",
-          "350.000",
-          "290.000",
-          "200.000",
-          "Combo Thư Giãn | Relax – 50 phút",
-          "Gội sạch 2 lần + Rửa mặt + Massage cổ vai tay",
-          "Wash twice + Face wash + Massage neck shoulder hand",
-          "320.000",
+          "NGUỒN LED",
+          "ADAPTER 12V 5A",
+          "Adapter dùng cho LED dây 12V",
+          "125.000đ",
+          "LED dây COB 12V",
+          "Ánh sáng mềm, phù hợp hắt trần",
+          "85.000đ",
+          "Nguồn tổ ong 24V 10A",
+          "Dùng cho hệ LED 24V công suất lớn",
+          "210.000đ",
         ].join("\n")
       )
     );
 
-    expect(imported.sections.some((section) => section.title === "CẮT TÓC NỮ")).toBe(true);
-    expect(imported.sections.some((section) => section.title === "Combo Thư Giãn")).toBe(true);
-    expect(imported.sections.find((section) => section.title === "CẮT TÓC NỮ")?.content).toContain(
-      "Giá Top Stylist"
-    );
+    expect(imported.sections.some((section) => section.title === "ADAPTER 12V 5A")).toBe(true);
+    expect(imported.sections.some((section) => section.title === "LED dây COB 12V")).toBe(true);
+    expect(
+      imported.sections.find((section) => section.title === "ADAPTER 12V 5A")?.content
+    ).toContain("Giá: 125.000đ");
   });
 
   it("imports spreadsheet price tables as one knowledge entry per row", async () => {
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.aoa_to_sheet([
-      ["DỊCH VỤ TÓC"],
-      ["Dịch vụ", "Top", "Senior", "Junior"],
-      ["Cắt tóc nữ", "350k", "290k", "200k"],
-      ["Gội thư giãn", "320.000đ", "", ""],
+      ["BẢNG GIÁ NGUỒN LED"],
+      ["Sản phẩm", "Giá bán lẻ", "Giá thi công"],
+      ["Adapter 12V 5A", "125k", "115k"],
+      ["Nguồn tổ ong 24V 10A", "210.000đ", "195.000đ"],
     ]);
-    XLSX.utils.book_append_sheet(workbook, sheet, "Salon");
+    XLSX.utils.book_append_sheet(workbook, sheet, "LED1000");
     const buffer = Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
 
     const imported = await importKnowledgeDocument(
-      "salon.xlsx",
+      "led1000.xlsx",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       buffer
     );
 
     expect(imported.sections).toHaveLength(2);
-    expect(imported.sections[0].title).toBe("Cắt tóc nữ");
-    expect(imported.sections[0].content).toContain("DỊCH VỤ TÓC");
-    expect(imported.sections[0].content).toContain("Top: 350k");
+    expect(imported.sections[0].title).toBe("Adapter 12V 5A");
+    expect(imported.sections[0].content).toContain("BẢNG GIÁ NGUỒN LED");
+    expect(imported.sections[0].content).toContain("Giá bán lẻ: 125k");
     expect(imported.sections[0].metadata?.sourceFormat).toBe("spreadsheet-row");
-    expect(imported.sections[1].content).toContain("320.000đ");
+    expect(imported.sections[1].content).toContain("195.000đ");
   });
 });

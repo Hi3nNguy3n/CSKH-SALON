@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const spec = {
   openapi: "3.0.3",
   info: {
-    title: "SalonDesk API",
+    title: "LinhKienLed1000 API",
     description:
       "AI-powered customer support agent API. Multi-channel support for WhatsApp, Email, Phone, Facebook Messenger, and Instagram Direct Messaging with autonomous AI actions.",
     version: "2026-04-07",
@@ -591,7 +591,7 @@ const spec = {
   },
   components: {
     securitySchemes: {
-      cookieAuth: { type: "apiKey", in: "cookie", name: "salondesk-token" },
+      cookieAuth: { type: "apiKey", in: "cookie", name: "linhkienled1000-token" },
     },
     schemas: {
       PaginatedResponse: {

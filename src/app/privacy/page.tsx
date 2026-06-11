@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Chính sách quyền riêng tư - SalonDesk",
-  description: "Chính sách quyền riêng tư của ứng dụng SalonDesk.",
+  title: "Chính sách quyền riêng tư - LinhKienLed1000",
+  description: "Chính sách quyền riêng tư của ứng dụng LinhKienLed1000.",
 };
 
 export default function PrivacyPage() {
@@ -15,16 +15,16 @@ export default function PrivacyPage() {
           </p>
           <h1 className="text-3xl font-semibold">Chính sách quyền riêng tư</h1>
           <p className="text-base leading-7 text-owly-text-light">
-            Chính sách này mô tả cách ứng dụng SalonDesk xử lý dữ liệu trong quá
+            Chính sách này mô tả cách ứng dụng LinhKienLed1000 xử lý dữ liệu trong quá
             trình vận hành CRM và chatbot AI/RAG chăm sóc khách hàng đa kênh cho
-            salon.
+            doanh nghiệp.
           </p>
         </header>
 
         <section className="space-y-3">
           <h2 className="text-xl font-semibold">Mục đích xử lý dữ liệu</h2>
           <p className="leading-7">
-            SalonDesk được dùng để hỗ trợ salon quản lý hội thoại, lưu lịch sử
+            LinhKienLed1000 được dùng để hỗ trợ doanh nghiệp quản lý hội thoại, lưu lịch sử
             chăm sóc khách hàng, vận hành chatbot tư vấn tự động và cải thiện
             chất lượng hỗ trợ khách hàng trên các kênh tích hợp.
           </p>
@@ -42,7 +42,7 @@ export default function PrivacyPage() {
               điện thoại nếu được nền tảng cung cấp.
             </li>
             <li>
-              Lịch sử hội thoại và thông tin CRM do salon nhập hoặc khách hàng
+              Lịch sử hội thoại và thông tin CRM do doanh nghiệp nhập hoặc khách hàng
               cung cấp.
             </li>
             <li>
@@ -57,7 +57,7 @@ export default function PrivacyPage() {
           <p className="leading-7">
             Dữ liệu chỉ được dùng để vận hành chatbot, lưu lịch sử chăm sóc
             khách hàng, cải thiện chất lượng tư vấn và hỗ trợ khách hàng khi có
-            yêu cầu. SalonDesk không bán dữ liệu người dùng cho bên thứ ba.
+            yêu cầu. LinhKienLed1000 không bán dữ liệu người dùng cho bên thứ ba.
           </p>
         </section>
 
@@ -75,4 +75,3 @@ export default function PrivacyPage() {
     </main>
   );
 }
-

@@ -10,10 +10,10 @@ const inter = Quicksand({
 });
 
 export const metadata: Metadata = {
-  title: "CSKH-SALON - Trợ lý CSKH AI",
+  title: "LinhKienLed1000 - Trợ lý CSKH AI",
   description: "Nền tảng hỗ trợ khách hàng bằng AI cho doanh nghiệp",
   icons: {
-    icon: "/salondesk-logo.svg",
+    icon: "/linhkienled1000-logo.svg",
   },
 };
 

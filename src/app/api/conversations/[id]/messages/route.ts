@@ -114,7 +114,7 @@ export async function POST(
       ) {
         const delivered = await sendEmail(
           conversation.customerContact,
-          `Reply from ${conversation.customerName || "SalonDesk"}`,
+          `Reply from ${conversation.customerName || "CSKH-SALON"}`,
           content.trim()
         );
         if (!delivered) {

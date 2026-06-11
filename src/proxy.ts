@@ -150,7 +150,7 @@ export function proxy(request: NextRequest) {
   }
 
   // Check for auth token (cookie) or API key (header)
-  const token = request.cookies.get("salondesk-token")?.value;
+  const token = request.cookies.get("linhkienled1000-token")?.value;
   const apiKey = request.headers.get("x-api-key");
 
   if (!token && !apiKey) {
@@ -186,7 +186,7 @@ export function proxy(request: NextRequest) {
       );
     }
     const response = NextResponse.redirect(new URL("/login", request.url));
-    response.cookies.delete("salondesk-token");
+    response.cookies.delete("linhkienled1000-token");
     return response;
   }
 

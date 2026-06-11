@@ -382,9 +382,9 @@ const apiSections: ApiSection[] = [
         path: "/api/settings",
         description: "Get the current application settings.",
         responseExample: {
-          businessName: "Luna Women's Hair Studio",
+          businessName: "LED1000 / Linh Kiện LED1000",
           welcomeMessage:
-            "Hello! Welcome to Luna Women's Hair Studio. Would you like help with pricing, hair consultations, or booking an appointment?",
+            "Xin chào! LED1000 có thể hỗ trợ bạn tìm đèn LED, nguồn điện, linh kiện hoặc phụ kiện phù hợp.",
           tone: "friendly",
           aiProvider: "gemini",
           aiModel: "gemini-2.5-flash",
@@ -456,7 +456,7 @@ const apiSections: ApiSection[] = [
     icon: Key,
     notes: [
       "This guide is for admins or customers who need to connect Facebook Messenger and Instagram Direct Messaging for the first time.",
-      "Both Facebook and Instagram use the same callback URL in CSKH-SALON: <APP_ORIGIN>/api/webhooks/meta.",
+      "Both Facebook and Instagram use the same callback URL in LinhKienLed1000: <APP_ORIGIN>/api/webhooks/meta.",
       "Use this guide to understand what each key/token is, where it comes from, and where to paste it in Settings.",
       "Meta Dashboard screens may change. Use the official Meta docs links as the source of truth for exact button names and review requirements.",
       "Never paste real access tokens or app secrets into chat, screenshots, public docs, logs, or Git commits.",
@@ -469,8 +469,8 @@ const apiSections: ApiSection[] = [
           "Confirm the business has an Instagram Business or Creator account for Instagram Direct Messaging.",
           "Make sure the person doing setup has admin/manage access to the Meta App, Facebook Page, and Instagram account.",
           "Prepare the public app URL. In production this is the customer domain; in local testing use a public HTTPS tunnel such as ngrok.",
-          "Decide one Verify Token string, for example my-salon-meta-verify-token. This is not provided by Meta; you create it and paste the same value into CSKH-SALON and Meta Dashboard.",
-          "Facebook and Instagram can use the same Verify Token for simplicity, or separate Verify Tokens if configured separately. The value entered in Meta Dashboard must match the value saved in the corresponding CSKH-SALON channel settings.",
+          "Decide one Verify Token string, for example led1000-meta-verify-token. This is not provided by Meta; you create it and paste the same value into LinhKienLed1000 and Meta Dashboard.",
+          "Facebook and Instagram can use the same Verify Token for simplicity, or separate Verify Tokens if configured separately. The value entered in Meta Dashboard must match the value saved in the corresponding LinhKienLed1000 channel settings.",
           "Keep Page Access Token, Instagram Access Token, and App Secret private. Do not send real values in chat, screenshots, public docs, or commits.",
         ],
       },
@@ -480,15 +480,15 @@ const apiSections: ApiSection[] = [
           "Meta Developer App: the container in developers.facebook.com where products, webhook callback, app secret, and permissions are configured.",
           "Facebook Page: the public page customers message through Messenger. It is different from the Meta Developer App.",
           "Instagram Business or Creator Account: the Instagram account customers message through Direct Messaging.",
-          "Callback URL: the CSKH-SALON webhook URL Meta calls. Use <APP_ORIGIN>/api/webhooks/meta for both Facebook and Instagram.",
-          "Verify Token: a shared text value used only when Meta verifies the callback URL. CSKH-SALON checks hub.verify_token against this value.",
-          "Access Token: the secret credential CSKH-SALON uses to send replies back to Facebook or Instagram.",
+          "Callback URL: the LinhKienLed1000 webhook URL Meta calls. Use <APP_ORIGIN>/api/webhooks/meta for both Facebook and Instagram.",
+          "Verify Token: a shared text value used only when Meta verifies the callback URL. LinhKienLed1000 checks hub.verify_token against this value.",
+          "Access Token: the secret credential LinhKienLed1000 uses to send replies back to Facebook or Instagram.",
           "App Secret: the Meta App secret used to validate x-hub-signature-256 on webhook POST requests.",
           "Graph Version: the Meta Graph API version used for send/config calls, for example v25.0.",
         ],
       },
       {
-        title: "3. Where to paste in CSKH-SALON",
+        title: "3. Where to paste in LinhKienLed1000",
         items: [
           "Settings -> Facebook -> Verify Token.",
           "Settings -> Facebook -> Page Access Token.",
@@ -509,7 +509,7 @@ const apiSections: ApiSection[] = [
           "Create an app only if there is no suitable existing app for this business.",
           "Inside the app, add or configure the Messenger product for Facebook Messenger.",
           "Inside the same app, add or configure the Instagram product/API flow for Instagram Direct Messaging.",
-          "Open App settings and copy the App Secret only if CSKH-SALON will verify webhook signatures in this environment.",
+          "Open App settings and copy the App Secret only if LinhKienLed1000 will verify webhook signatures in this environment.",
           "Do not confuse App ID with Page ID. App ID identifies the Meta Developer App; Page ID identifies the Facebook Page.",
         ],
       },
@@ -527,9 +527,9 @@ const apiSections: ApiSection[] = [
         title: "6. Get the Facebook Page Access Token",
         items: [
           "In the Meta Developer App, open the Messenger or Messenger API setup area.",
-          "Select the Facebook Page that CSKH-SALON should reply from.",
+          "Select the Facebook Page that LinhKienLed1000 should reply from.",
           "Generate or copy the Page Access Token for that Page.",
-          "Paste it into CSKH-SALON Settings -> Facebook -> Page Access Token.",
+          "Paste it into LinhKienLed1000 Settings -> Facebook -> Page Access Token.",
           "Optional Page ID lookup: call https://graph.facebook.com/v25.0/me?fields=id,name&access_token=YOUR_FACEBOOK_PAGE_ACCESS_TOKEN and use the returned id.",
           "If the token later returns 401 or 403, regenerate it or check permissions/app mode/review in Meta Dashboard.",
         ],
@@ -537,12 +537,12 @@ const apiSections: ApiSection[] = [
       {
         title: "7. Configure Facebook Messenger webhook",
         items: [
-          "In CSKH-SALON Settings -> Facebook, fill Verify Token, Page Access Token, Graph Version, optional Page ID, and optional App Secret.",
+          "In LinhKienLed1000 Settings -> Facebook, fill Verify Token, Page Access Token, Graph Version, optional Page ID, and optional App Secret.",
           "Save the Facebook channel config before testing Meta verification.",
           "In Meta Dashboard webhook settings, set Callback URL to <APP_ORIGIN>/api/webhooks/meta.",
-          "Set Verify Token in Meta Dashboard to exactly the same value saved in CSKH-SALON.",
+          "Set Verify Token in Meta Dashboard to exactly the same value saved in LinhKienLed1000.",
           "Subscribe the Facebook Page/webhook to the Messenger message events required by the app.",
-          "Send a real message to the Facebook Page and confirm CSKH-SALON creates a conversation with channel=facebook.",
+          "Send a real message to the Facebook Page and confirm LinhKienLed1000 creates a conversation with channel=facebook.",
         ],
       },
       {
@@ -551,7 +551,7 @@ const apiSections: ApiSection[] = [
           "Use an Instagram Business or Creator account according to Meta's current requirements.",
           "Confirm the setup user can manage the Instagram account and any related business assets required by Meta.",
           "Use Instagram API with Instagram Login / Direct Messaging. Instagram Basic Display API is not enough for chatbot messaging.",
-          "If the account is new or not eligible, complete Meta's account/business setup first before connecting CSKH-SALON.",
+          "If the account is new or not eligible, complete Meta's account/business setup first before connecting LinhKienLed1000.",
           "Do not reuse a Facebook Page Access Token as the Instagram Access Token for this direct Instagram flow.",
         ],
       },
@@ -562,19 +562,19 @@ const apiSections: ApiSection[] = [
           "Configure the app/account according to Meta's Instagram Direct Messaging requirements.",
           "Complete the authorization/login step for the Instagram account that should receive messages.",
           "Copy the Instagram Access Token produced by that flow.",
-          "Paste it into CSKH-SALON Settings -> Instagram -> Access Token.",
+          "Paste it into LinhKienLed1000 Settings -> Instagram -> Access Token.",
           "Optional Business Account ID is metadata for checking/debugging. Webhook recipient.id can also help confirm which Instagram account received a message.",
         ],
       },
       {
         title: "10. Configure Instagram Direct Messaging webhook",
         items: [
-          "In CSKH-SALON Settings -> Instagram, fill Verify Token, Access Token, Graph Version, optional Business Account ID, and optional App Secret.",
+          "In LinhKienLed1000 Settings -> Instagram, fill Verify Token, Access Token, Graph Version, optional Business Account ID, and optional App Secret.",
           "Save the Instagram channel config before testing Meta verification.",
           "In Meta Dashboard webhook settings, use the same shared callback URL: <APP_ORIGIN>/api/webhooks/meta.",
-          "Set Verify Token in Meta Dashboard to exactly the same value saved in CSKH-SALON.",
+          "Set Verify Token in Meta Dashboard to exactly the same value saved in LinhKienLed1000.",
           "Subscribe the required Instagram messaging/webhook events in Meta Dashboard.",
-          "Send a real DM to the Instagram account and confirm CSKH-SALON creates a conversation with channel=instagram.",
+          "Send a real DM to the Instagram account and confirm LinhKienLed1000 creates a conversation with channel=instagram.",
         ],
       },
       {
@@ -583,13 +583,13 @@ const apiSections: ApiSection[] = [
           "In development mode, only admins, developers, or testers may be able to interact with the Meta App.",
           "If internal testers can send messages but real customers cannot, check Meta App Review, required permissions, app mode, and business verification requirements.",
           "Before going live for a customer, review the official Meta docs for the current permission and review requirements for Messenger and Instagram Direct Messaging.",
-          "Do not treat a successful local webhook test as full production approval. It only proves CSKH-SALON can receive the payload shape.",
+          "Do not treat a successful local webhook test as full production approval. It only proves LinhKienLed1000 can receive the payload shape.",
         ],
       },
       {
         title: "12. How to know setup is working",
         items: [
-          "Meta webhook verification succeeds when Meta sends hub.mode=subscribe and CSKH-SALON returns hub.challenge as plain text.",
+          "Meta webhook verification succeeds when Meta sends hub.mode=subscribe and LinhKienLed1000 returns hub.challenge as plain text.",
           "Facebook test succeeds when a Messenger message creates or updates a conversation with channel=facebook.",
           "Instagram test succeeds when an Instagram DM creates or updates a conversation with channel=instagram.",
           "Channel config checks should show hasPageAccessToken/hasAccessToken and hasAppSecret without exposing raw secret values.",
@@ -605,7 +605,7 @@ const apiSections: ApiSection[] = [
           "401 or 403 from Meta: token may be expired, missing permission, blocked by app mode/review, or tied to the wrong account/page.",
           "Facebook Page ID is empty: acceptable if the Page Access Token works with /me/messages.",
           "Instagram token does not work: confirm it is from the Instagram API with Instagram Login / Direct Messaging flow, not Basic Display API.",
-          "If any token is exposed, rotate or revoke it in Meta Developer Dashboard and update CSKH-SALON Settings.",
+          "If any token is exposed, rotate or revoke it in Meta Developer Dashboard and update LinhKienLed1000 Settings.",
         ],
       },
       {
@@ -868,7 +868,7 @@ const apiSections: ApiSection[] = [
       "Important: this integration targets Instagram Direct Messaging API / Instagram API with Instagram Login.",
       "Do not use Instagram Basic Display API for chatbot messaging.",
       "Do not use a Facebook Page Access Token as the Instagram Access Token for the direct Instagram flow.",
-      "Business Account ID: optional metadata in CSKH-SALON. The webhook payload recipient.id can help confirm which Instagram business/account received the message.",
+      "Business Account ID: optional metadata in LinhKienLed1000. The webhook payload recipient.id can help confirm which Instagram business/account received the message.",
       "Instagram payload mapping: sender.id -> Instagram sender id, recipient.id -> Instagram business/account id, customerContact -> instagram:<sender_id>.",
       "Security: GET channel responses never return raw accessToken or appSecret. Blank or masked secret fields preserve the existing secret on save.",
       "Local POST test: curl -X POST \"http://localhost:3000/api/webhooks/meta\" -H \"Content-Type: application/json\" -d \"{\\\"object\\\":\\\"instagram\\\",\\\"entry\\\":[{\\\"messaging\\\":[{\\\"sender\\\":{\\\"id\\\":\\\"IG_SENDER_TEST\\\"},\\\"recipient\\\":{\\\"id\\\":\\\"IG_BUSINESS_TEST\\\"},\\\"message\\\":{\\\"text\\\":\\\"hello instagram\\\"}}]}]}\"",
@@ -1379,7 +1379,7 @@ export default function ApiDocsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Header title="API Documentation" description="Integrate SalonDesk with your systems" />
+      <Header title="API Documentation" description="Integrate LinhKienLed1000 with your systems" />
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar */}

@@ -7,7 +7,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **CSKH-SALON** (3239 symbols, 7227 relationships, 266 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **LinhKienLed1000** (3239 symbols, 7227 relationships, 266 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -30,10 +30,10 @@ This project is indexed by GitNexus as **CSKH-SALON** (3239 symbols, 7227 relati
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/CSKH-SALON/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/CSKH-SALON/clusters` | All functional areas |
-| `gitnexus://repo/CSKH-SALON/processes` | All execution flows |
-| `gitnexus://repo/CSKH-SALON/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/LinhKienLed1000/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/LinhKienLed1000/clusters` | All functional areas |
+| `gitnexus://repo/LinhKienLed1000/processes` | All execution flows |
+| `gitnexus://repo/LinhKienLed1000/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

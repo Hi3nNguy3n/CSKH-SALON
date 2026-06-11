@@ -288,6 +288,10 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
           profileNotes: true,
           tags: true,
           preferences: true,
+          purchaseContext: true,
+          technicalNeeds: true,
+          quoteStatus: true,
+          previousAdvisor: true,
         },
       })
     : await prisma.customer.findFirst({
@@ -307,6 +311,10 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
           profileNotes: true,
           tags: true,
           preferences: true,
+          purchaseContext: true,
+          technicalNeeds: true,
+          quoteStatus: true,
+          previousAdvisor: true,
         },
       });
 
@@ -339,6 +347,10 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
             tags: customer.tags,
             profileNotes: customer.profileNotes,
             preferences: customer.preferences,
+            purchaseContext: customer.purchaseContext,
+            technicalNeeds: customer.technicalNeeds,
+            quoteStatus: customer.quoteStatus,
+            previousAdvisor: customer.previousAdvisor,
           }
         : null,
       history: [],
@@ -377,6 +389,10 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
           tags: customer.tags,
           profileNotes: customer.profileNotes,
           preferences: customer.preferences,
+          purchaseContext: customer.purchaseContext,
+          technicalNeeds: customer.technicalNeeds,
+          quoteStatus: customer.quoteStatus,
+          previousAdvisor: customer.previousAdvisor,
         }
       : null,
     history,

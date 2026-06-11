@@ -6,7 +6,7 @@
 
 ## Tóm tắt
 
-Task này tập trung tối ưu phần import dữ liệu vào Kho kiến thức, đặc biệt cho các file salon có bố cục phức tạp như bảng giá Word/PDF/ảnh nhiều cột, nhiều bảng, có phần giới thiệu, quy trình, chính sách, FAQ và thông tin liên hệ.
+Task này tập trung tối ưu phần import dữ liệu vào Kho kiến thức, đặc biệt cho các file catalogue LED1000 có bố cục phức tạp như bảng giá Word/PDF/ảnh nhiều cột, nhiều bảng, có phần giới thiệu, quy trình, chính sách, FAQ và thông tin liên hệ.
 
 Trước đây luồng import chủ yếu dựa vào parser thường. Với file Word có bảng phức tạp hoặc nhiều ảnh, dữ liệu dễ bị cắt sai, ghép nhầm tiêu đề/giá, hoặc import thành các mục quá vụn. Sau thay đổi này, hệ thống có thêm luồng đọc bằng Gemini, có màn hình xem trước có thể chỉnh sửa trước khi import thật.
 
@@ -127,7 +127,7 @@ Parser thường vẫn được giữ để dùng cho file text rõ ràng, khôn
 Đã tối ưu thêm cho các dạng phổ biến:
 
 - FAQ có nhãn câu hỏi/trả lời linh hoạt hơn
-- bảng giá salon
+- bảng giá LED1000
 - bảng dịch vụ có nhiều dòng mô tả
 - intro/heading/chunk text fallback
 - workbook/Excel/CSV
@@ -152,7 +152,7 @@ Gemini prompt/schema đã được mở rộng để phân loại nhiều loại
 - `intro`
 - `note`
 
-Mục tiêu: file salon có nhiều loại thông tin khác nhau thì không bị ép hết thành bảng giá.
+Mục tiêu: file catalogue LED1000 có nhiều loại thông tin khác nhau thì không bị ép hết thành bảng giá.
 
 ### 8. Validator giá và cảnh báo review
 
@@ -192,7 +192,7 @@ Kết quả gần nhất:
 
 Lưu ý trên Windows/Vite, test cần chạy ngoài sandbox trong một số môi trường do lỗi `spawn EPERM`.
 
-## Kết quả thử với file salon thực tế
+## Kết quả thử với file catalogue LED1000 thực tế
 
 File thử: `Data.docx`
 
@@ -208,9 +208,9 @@ Kết quả preview gần nhất:
 
 Các phần không phải giá đã được phân loại tốt hơn:
 
-- giới thiệu salon
+- giới thiệu doanh nghiệp LED1000
 - thương hiệu sản phẩm
-- phân loại size tóc
+- phân loại thông số sản phẩm
 - mô tả dịch vụ
 - quy trình
 - chính sách bảo hành
@@ -300,7 +300,7 @@ Nói cách khác: task này cải thiện chất lượng dữ liệu đầu và
 
 Chưa triển khai / Đề xuất Phase sau:
 
-- tạo bộ câu hỏi đánh giá RAG thực tế cho salon
+- tạo bộ câu hỏi đánh giá RAG thực tế cho LED1000
 - test retrieval top 10 theo đúng luồng chatbot
 - thêm rerank kết quả retrieval bằng Gemini
 - cân nhắc pgvector nếu số lượng knowledge lớn

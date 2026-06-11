@@ -98,7 +98,7 @@ export default function GoLivePage() {
     <div className="flex-1 flex flex-col min-h-0">
       <Header
         title="Go Live"
-        description="Checklist vận hành trước khi để SalonDesk hỗ trợ khách hàng thật"
+        description="Checklist vận hành trước khi để hệ thống hỗ trợ khách hàng LED1000 thật"
       />
 
       <div className="flex-1 overflow-y-auto p-6">
@@ -176,13 +176,13 @@ export default function GoLivePage() {
               <div className="rounded-lg border border-owly-border bg-owly-bg p-4">
                 <p className="text-sm font-semibold text-owly-text">2. Theo dõi hội thoại trong ngày đầu</p>
                 <p className="text-sm text-owly-text-light mt-1">
-                  Vào mục Hội thoại để xem AI hỏi tóc, báo giá khoảng và chốt lịch có đúng ý không.
+                  Vào mục Hội thoại để xem AI hỏi thông số, báo giá theo dữ liệu và chuyển nhân viên khi cần có đúng ý không.
                 </p>
               </div>
               <div className="rounded-lg border border-owly-border bg-owly-bg p-4">
                 <p className="text-sm font-semibold text-owly-text">3. Chỉnh prompt hoặc kho kiến thức nếu sai</p>
                 <p className="text-sm text-owly-text-light mt-1">
-                  Nếu AI tư vấn chưa đúng nghiệp vụ salon, sửa ở Cài đặt hoặc Kho kiến thức rồi test lại ngay.
+                  Nếu AI tư vấn chưa đúng nghiệp vụ LED1000, sửa ở Cài đặt hoặc Kho kiến thức rồi test lại ngay.
                 </p>
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function GoLivePage() {
             >
               <p className="text-sm font-semibold text-owly-text">Cấu hình AI</p>
               <p className="text-xs text-owly-text-light mt-1">
-                Đổi provider, model, prompt và thông tin salon
+                Đổi provider, model, prompt và thông tin doanh nghiệp
               </p>
               <span className="mt-3 inline-flex items-center gap-1 text-sm text-owly-primary font-medium">
                 Mở cài đặt <ArrowRight className="h-4 w-4" />
@@ -207,7 +207,7 @@ export default function GoLivePage() {
             >
               <p className="text-sm font-semibold text-owly-text">Kho kiến thức</p>
               <p className="text-xs text-owly-text-light mt-1">
-                Chỉnh giá, chính sách, FAQ và chăm sóc sau dịch vụ
+                Chỉnh sản phẩm, giá, chính sách, FAQ và chăm sóc khách hàng
               </p>
               <span className="mt-3 inline-flex items-center gap-1 text-sm text-owly-primary font-medium">
                 Mở kho kiến thức <ArrowRight className="h-4 w-4" />

@@ -308,7 +308,7 @@ async function fetchHtml(url: string, timeoutMs: number): Promise<{ html: string
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        "User-Agent": "CSKH-SALON LED1000 one-time knowledge crawler/1.1",
+        "User-Agent": "LinhKienLed1000 LED1000 one-time knowledge crawler/1.1",
         Accept: "text/html,application/xhtml+xml",
       },
     });

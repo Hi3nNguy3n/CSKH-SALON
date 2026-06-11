@@ -3,7 +3,9 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 
-const connectionString = process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/owly?schema=public";
+const connectionString =
+  process.env.DATABASE_URL ||
+  "postgresql://postgres:postgres@localhost:5432/linhkienled1000?schema=public";
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
@@ -53,14 +55,23 @@ async function main() {
   // Create default business hours
   await prisma.businessHours.upsert({
     where: { id: "default" },
-    update: {},
-    create: { id: "default" },
+    update: {
+      offlineMessage: "LED1000 hiện đang ngoài giờ hỗ trợ. Chúng tôi sẽ phản hồi bạn trong khung giờ hoạt động sớm nhất.",
+    },
+    create: {
+      id: "default",
+      offlineMessage: "LED1000 hiện đang ngoài giờ hỗ trợ. Chúng tôi sẽ phản hồi bạn trong khung giờ hoạt động sớm nhất.",
+    },
   });
 
   // Create LED1000 demo departments
   const tvDept = await prisma.department.upsert({
     where: { id: "dept-tv" },
-    update: {},
+    update: {
+      name: "Tư vấn sản phẩm",
+      description: "Tư vấn chọn đèn LED, nguồn điện, linh kiện và báo giá theo dữ liệu có sẵn",
+      email: "tuvan@led1000.vn",
+    },
     create: {
       id: "dept-tv",
       name: "Tư vấn sản phẩm",
@@ -71,7 +82,11 @@ async function main() {
 
   const cskdDept = await prisma.department.upsert({
     where: { id: "dept-cskh" },
-    update: {},
+    update: {
+      name: "Chăm sóc khách hàng",
+      description: "Xử lý phản hồi, bảo hành, đổi trả và hỗ trợ đơn hàng",
+      email: "cskh@led1000.vn",
+    },
     create: {
       id: "dept-cskh",
       name: "Chăm sóc khách hàng",
@@ -82,7 +97,11 @@ async function main() {
 
   const stylDept = await prisma.department.upsert({
     where: { id: "dept-technical" },
-    update: {},
+    update: {
+      name: "Kỹ thuật",
+      description: "Hỗ trợ thông số nguồn điện, công suất, lắp đặt và an toàn điện",
+      email: "kythuat@led1000.vn",
+    },
     create: {
       id: "dept-technical",
       name: "Kỹ thuật",
@@ -102,7 +121,7 @@ async function main() {
   for (const m of members) {
     await prisma.teamMember.upsert({
       where: { id: m.id },
-      update: {},
+      update: m,
       create: m,
     });
   }
@@ -112,11 +131,11 @@ async function main() {
     { id: "cat-faq", name: "FAQ", description: "Câu hỏi khách thường gặp", icon: "help-circle", color: "#4A7C9B", sortOrder: 0 },
     { id: "cat-products", name: "Sản phẩm LED", description: "Đèn LED, nguồn điện, module, linh kiện và phụ kiện chiếu sáng", icon: "package", color: "#22C55E", sortOrder: 1 },
     { id: "cat-policies", name: "Chính sách", description: "Giao hàng, bảo hành, đổi trả và hỗ trợ đơn hàng", icon: "shield", color: "#F59E0B", sortOrder: 2 },
-    { id: "cat-haircare", name: "Tư vấn kỹ thuật", description: "Điện áp, công suất, tải nguồn, môi trường sử dụng và lắp đặt", icon: "zap", color: "#EC4899", sortOrder: 3 },
+    { id: "cat-technical", name: "Tư vấn kỹ thuật", description: "Điện áp, công suất, tải nguồn, môi trường sử dụng và lắp đặt", icon: "zap", color: "#EC4899", sortOrder: 3 },
   ];
 
   for (const c of categories) {
-    await prisma.category.upsert({ where: { id: c.id }, update: {}, create: c });
+    await prisma.category.upsert({ where: { id: c.id }, update: c, create: c });
   }
 
   const entries = [
@@ -135,11 +154,11 @@ async function main() {
     { id: "entry-4", categoryId: "cat-policies", title: "Giao hàng và xác nhận đơn", content: "Nếu Knowledge Base chưa có chính sách giao hàng rõ cho đơn cụ thể, bot cần hỏi thêm địa chỉ, số lượng, sản phẩm và đề nghị nhân viên xác nhận.", priority: 8 },
     { id: "entry-5", categoryId: "cat-policies", title: "Bảo hành và đổi trả", content: "Chỉ trả lời chính sách bảo hành/đổi trả theo thông tin có trong Knowledge Base. Nếu chưa có dữ liệu rõ, cần nói chưa có thông tin chính xác và chuyển nhân viên xác nhận.", priority: 7 },
     // Tư vấn kỹ thuật
-    { id: "entry-12", categoryId: "cat-haircare", title: "An toàn kỹ thuật điện", content: "Với lắp đặt nguồn, tải lớn, ngoài trời, chống nước hoặc đấu nối điện 220V, bot chỉ tư vấn ở mức thông tin và khuyến nghị nhân viên kỹ thuật/thợ đủ chuyên môn kiểm tra trước khi thi công.", priority: 8 },
+    { id: "entry-12", categoryId: "cat-technical", title: "An toàn kỹ thuật điện", content: "Với lắp đặt nguồn, tải lớn, ngoài trời, chống nước hoặc đấu nối điện 220V, bot chỉ tư vấn ở mức thông tin và khuyến nghị nhân viên kỹ thuật/thợ đủ chuyên môn kiểm tra trước khi thi công.", priority: 8 },
   ];
 
   for (const e of entries) {
-    await prisma.knowledgeEntry.upsert({ where: { id: e.id }, update: {}, create: e });
+    await prisma.knowledgeEntry.upsert({ where: { id: e.id }, update: { ...e, isActive: true }, create: e });
   }
 
   // Create demo tags
@@ -168,7 +187,7 @@ async function main() {
   ];
 
   for (const cr of cannedResponses) {
-    await prisma.cannedResponse.upsert({ where: { id: cr.id }, update: {}, create: cr });
+    await prisma.cannedResponse.upsert({ where: { id: cr.id }, update: { ...cr, isActive: true }, create: cr });
   }
 
   // Create sample SLA rules

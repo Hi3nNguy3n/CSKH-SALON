@@ -55,7 +55,7 @@ describe("POST /api/knowledge/import/preview", () => {
         },
         {
           title: "Bảng giá import",
-          content: "Bảng giá dịch vụ",
+          content: "Bảng giá sản phẩm",
           metadata: { sourceFormat: "price-catalogue", parserConfidence: 0.65 },
         },
       ],
@@ -65,8 +65,8 @@ describe("POST /api/knowledge/import/preview", () => {
       warnings: ["Gemini warning"],
       sections: [
         {
-          title: "Cắt tóc nữ",
-          content: "Giá Top Stylist: 350.000\nGiá Senior Stylist: 290.000",
+          title: "Adapter 12V 5A",
+          content: "Giá bán lẻ: 125.000\nGiá thi công: 115.000",
           metadata: { sourceFormat: "gemini-document", parserConfidence: 0.88 },
         },
       ],
@@ -124,7 +124,7 @@ describe("POST /api/knowledge/import/preview", () => {
     expect(data.chunkCount).toBe(1);
     expect(data.sections[0]).toEqual(
       expect.objectContaining({
-        title: "Cắt tóc nữ",
+        title: "Adapter 12V 5A",
         sourceFormat: "gemini-document",
         parserConfidence: 0.88,
       })

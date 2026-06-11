@@ -151,22 +151,22 @@ export async function importKnowledgeDocumentWithGemini(
 
 function buildGeminiKnowledgePrompt(fileName: string, mimeType: string): string {
   return [
-    "Bạn là bộ chuyển đổi tài liệu salon thành Knowledge Base cho chatbot CSKH.",
-    "Hãy đọc tài liệu theo bố cục thị giác nếu có: bảng, tiêu đề, cột giá, ghi chú, FAQ, chính sách, quy trình, hình ảnh có chữ.",
+    "Bạn là bộ chuyển đổi tài liệu doanh nghiệp thành Knowledge Base cho chatbot CSKH/tư vấn sản phẩm.",
+    "Hãy đọc tài liệu theo bố cục thị giác nếu có: bảng, tiêu đề, cột giá, ghi chú, FAQ, chính sách, thông số kỹ thuật, catalogue, hình ảnh có chữ.",
     "Nếu input là DOCX structured extract, hãy ưu tiên các bảng markdown [TABLE n], heading và marker ảnh [IMAGE n] để khôi phục ngữ cảnh.",
     "Mục tiêu là tạo các chunk độc lập, đúng ngữ cảnh, dễ dùng cho RAG.",
     "Quy tắc:",
-    "- Mỗi dịch vụ/bảng giá/FAQ/chính sách/quy trình nên là một chunk riêng.",
-    "- Không tạo chunk chỉ có giá mà thiếu tên dịch vụ.",
-    "- Với bảng giá, giữ rõ tên dịch vụ, mô tả, size/cấp stylist/cột giá và giá tương ứng.",
-    "- Không được bỏ sót giá trong bảng nguồn. Nếu có số giá ở source, phải đưa vào content đúng dịch vụ/cột hoặc cảnh báo rõ trong warnings.",
+    "- Mỗi sản phẩm/nhóm sản phẩm/bảng giá/FAQ/chính sách/thông số kỹ thuật nên là một chunk riêng.",
+    "- Không tạo chunk chỉ có giá mà thiếu tên sản phẩm, mã sản phẩm hoặc nhóm sản phẩm.",
+    "- Với bảng giá, giữ rõ tên sản phẩm, mã sản phẩm nếu có, quy cách, điện áp, công suất, đơn vị tính, cột giá và giá tương ứng.",
+    "- Không được bỏ sót giá trong bảng nguồn. Nếu có số giá ở source, phải đưa vào content đúng sản phẩm/quy cách/cột hoặc cảnh báo rõ trong warnings.",
     "- Giữ nguyên giá/range/đơn vị như source, ví dụ 900K, 1.300K, 900.000/lần, 100.000 – 150.000.",
     "- Nếu bảng có ô gộp hoặc header nhiều dòng, hãy diễn giải cột thành nhãn rõ ràng thay vì đẩy lệch giá sang cột khác.",
     "- Nếu có nhiều bảng liên quan, giữ tên nhóm lớn trong content.",
     "- Bỏ qua slogan/trang trí lặp lại nếu không giúp trả lời khách.",
     "- Không bịa dữ liệu không có trong file.",
-    "- Viết tiếng Việt tự nhiên, giữ thuật ngữ salon/tiếng Anh cần thiết.",
-    "- Gán type đúng bản chất nội dung: price cho bảng giá, faq cho hỏi đáp, policy/warranty cho chính sách/bảo hành, process cho quy trình, promotion/membership cho ưu đãi/thẻ, contact/hours cho liên hệ/thời gian, intro cho giới thiệu.",
+    "- Viết tiếng Việt tự nhiên, giữ thuật ngữ sản phẩm/kỹ thuật/tiếng Anh cần thiết.",
+    "- Gán type đúng bản chất nội dung: price cho bảng giá, product cho sản phẩm, product_category cho nhóm sản phẩm, faq cho hỏi đáp, policy/warranty cho chính sách/bảo hành, technical cho thông số/tư vấn kỹ thuật, promotion cho ưu đãi, contact/hours cho liên hệ/thời gian, intro cho giới thiệu.",
     "- confidence từ 0 đến 1, thấp hơn nếu bảng bị mờ/khó đọc/không chắc.",
     "Chỉ trả JSON hợp lệ, không markdown.",
     "Schema:",
@@ -326,11 +326,11 @@ function normalizeGeminiType(
   if (/bang gia|gia dich vu|price|gia:|vnd|vnđ/.test(haystack) || hasPriceTokens(content)) {
     return "price";
   }
-  if (/san pham|product|duong chat|serum|olaplex|keratin|peptide|amino acid/.test(haystack)) {
+  if (/san pham|product|den led|led day|module|adapter|nguon|phu kien|linh kien/.test(haystack)) {
     return "product";
   }
   if (/gioi thieu|cam on|thuong hieu|dong hanh|hanh trinh/.test(haystack)) return "intro";
-  if (/dich vu|service|combo|lieu trinh|cat toc|nhuom|tay|uon|duoi|goi dau/.test(haystack)) {
+  if (/tu van|ky thuat|dien ap|cong suat|lap dat|bao gia/.test(haystack)) {
     return "service";
   }
 
@@ -558,7 +558,7 @@ function isPriceReviewCandidate(section: ImportedKnowledgeSection): boolean {
   }
 
   const haystack = normalizeKeyword(`${section.title}\n${section.content}`);
-  return /gia|vnd|vnđ|price|uu dai|voucher|the|bill|combo|lieu trinh|dich vu|service|goi/.test(
+  return /gia|vnd|vnđ|price|uu dai|voucher|bill|combo|bao gia|san pham|product/.test(
     haystack
   );
 }
