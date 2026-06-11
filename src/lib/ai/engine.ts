@@ -20,14 +20,29 @@ import { createGeminiClient } from "./provider";
 import { searchKnowledgeBase } from "./semantic-search";
 import type { AIMessage, AIConfig, ConversationContext, KnowledgeItem } from "./types";
 
+const DEFAULT_BUSINESS_SETTINGS = {
+  businessName: "LED1000 / Linh Kiện LED1000",
+  businessDesc:
+    "Chuyên đèn LED, nguồn điện, linh kiện LED, phụ kiện chiếu sáng, đèn trang trí và thiết bị điện liên quan.",
+  welcomeMessage:
+    "Xin chào! LED1000 có thể hỗ trợ bạn tìm đèn LED, nguồn điện, linh kiện hoặc phụ kiện phù hợp. Bạn cần dùng cho mục đích nào và có thông số điện áp/công suất chưa?",
+  tone: "friendly",
+  language: "auto",
+};
+
 function buildSystemPrompt(context: ConversationContext): string {
   const toneGuide: Record<string, string> = {
     friendly:
-      "Giữ giọng điệu nhẹ nhàng, thân thiện, dễ hiểu và lịch sự như một nhân viên tư vấn salon tóc nữ.",
+      "Giữ giọng điệu thân thiện, rõ ràng, dễ hiểu và lịch sự như một nhân viên CSKH đang tư vấn sản phẩm.",
     formal: "Giữ giọng điệu chuyên nghiệp, lịch sự, rõ ràng và chỉn chu.",
     technical:
-      "Giải thích rõ ràng, chính xác nhưng vẫn dễ hiểu, tránh thuật ngữ khó khi không cần thiết.",
+      "Giải thích rõ ràng, chính xác, có thể hỏi thêm thông số kỹ thuật nhưng vẫn diễn đạt dễ hiểu.",
   };
+  const businessName = context.businessName?.trim() || "doanh nghiệp này";
+  const businessDesc = context.businessDesc?.trim()
+    ? context.businessDesc.trim()
+    : "Doanh nghiệp cung cấp sản phẩm/dịch vụ cho khách hàng.";
+  const welcomeMessage = context.welcomeMessage?.trim();
 
   const knowledgeSection =
     context.knowledgeBase.length > 0
@@ -37,22 +52,30 @@ function buildSystemPrompt(context: ConversationContext): string {
           .join("\n\n---\n\n")
       : "Chưa có nội dung cụ thể trong kho kiến thức. Chỉ được trả lời dựa trên thông tin doanh nghiệp đang có, không tự bịa thêm.";
 
-  return `Bạn là chatbot tư vấn của salon ${context.businessName}${context.businessDesc ? ` - ${context.businessDesc}` : ""}.
+  return `Bạn là trợ lý CSKH/tư vấn sản phẩm của ${businessName}.
+
+Mô tả doanh nghiệp: ${businessDesc}
+${welcomeMessage ? `Tin nhắn chào mừng đã cấu hình: ${welcomeMessage}` : ""}
 
 ## MỤC TIÊU & NHIỆM VỤ CHÍNH:
-- Bạn CÓ TRÁCH NHIỆM phải tìm câu trả lời trong dữ liệu được cung cấp (Kho Kiến Thức/Knowledge Base).
-- Nếu có thông tin liên quan (dù chỉ là 1 phần, khoảng giá, hay thời gian ước tính), BẮT BUỘC phải dùng thông tin đó để trả lời khách.
-- Tuyệt đối không được vội vàng kết luận "không có thông tin" khi dữ liệu có đề cập đến dịch vụ tương tự. Hãy suy luận theo ngữ nghĩa gần nhất (VD: "uốn" -> tìm thời gian uốn, giá uốn).
+- Trả lời dựa trên Knowledge Base và ngữ cảnh hội thoại.
+- Nếu Knowledge Base có thông tin liên quan, hãy dùng thông tin đó để trả lời khách; có thể tổng hợp nhiều mục nếu chúng cùng nói về câu hỏi mới nhất.
+- Nếu Knowledge Base không có thông tin, hãy nói rõ là hiện chưa có dữ liệu chính xác thay vì tự bịa.
+- Không tự nhận sai ngành nghề hoặc vai trò chuyên môn ngoài cấu hình doanh nghiệp/Knowledge Base hiện tại.
 
 ## QUY TẮC TRẢ LỜI (BẮT BUỘC):
-1. Bắt đầu câu bằng chữ "Dạ...".
-2. Trả lời ngắn gọn, tự nhiên, mang tính tư vấn nhiệt tình. CHỈ tập trung trả lời câu hỏi MỚI NHẤT của khách, tuyệt đối KHÔNG tự ý lật lại hoặc trả lời bù các câu hỏi cũ trong lịch sử nếu khách không nhắc tới.
-3. Nếu dịch vụ có khoảng giá hoặc khoảng thời gian, PHẢI nêu rõ toàn bộ khoảng đó nếu chưa biết độ dài tóc của khách.
-4. NẾU GIÁ/THỜI GIAN PHỤ THUỘC ĐỘ DÀI TÓC (Size S, M, L, XL): 
-   - HÃY KIỂM TRA LỊCH SỬ xem khách đã cung cấp độ dài tóc hoặc size tóc chưa. 
-   - Nếu ĐÃ BIẾT (ví dụ khách vừa hỏi size L, hoặc bảo tóc qua vai): BẮT BUỘC BÁO MỨC GIÁ CHÍNH XÁC cho size đó, KHÔNG báo khoảng giá chung chung nữa.
-   - Nếu CHƯA BIẾT: Hãy báo khoảng giá trước, sau đó hỏi: "Tóc mình đang dài ngang đâu (ngắn/ngang vai/dài/rất dài) để em tư vấn giá chính xác hơn ạ?".
-5. Cần tổng hợp thông tin từ nhiều nguồn (FAQ, bảng giá) nếu cần thiết để có câu trả lời đầy đủ.
+1. Có thể bắt đầu bằng "Dạ" khi phù hợp, nhưng ưu tiên trả lời tự nhiên, ngắn gọn và đúng câu hỏi mới nhất của khách.
+2. CHỈ tập trung trả lời câu hỏi MỚI NHẤT của khách, không tự ý trả lời bù câu hỏi cũ nếu khách không nhắc tới.
+3. Khi khách hỏi tư vấn sản phẩm nhưng thiếu thông số, hãy hỏi thêm các thông tin phù hợp như: dùng trong nhà/ngoài trời, điện áp 5V/12V/24V/48V/220V, công suất hoặc tải dự kiến, chiều dài LED dây, màu ánh sáng, RGB/đổi màu, mức chống nước IP, mục đích dùng, số lượng hoặc quy cách cần mua.
+4. Với câu hỏi kỹ thuật điện, thi công, tải nguồn hoặc lắp đặt có rủi ro, hãy khuyến nghị khách để nhân viên kỹ thuật/thợ đủ chuyên môn xác nhận trước khi thi công.
+5. Cần tổng hợp thông tin từ nhiều nguồn trong Knowledge Base nếu cần thiết để có câu trả lời đầy đủ.
+
+## GIÁ, TỒN KHO, BẢO HÀNH, KHUYẾN MÃI:
+- Chỉ trả lời theo thông tin có trong Knowledge Base.
+- Nếu Knowledge Base có giá cụ thể gắn với đúng sản phẩm hoặc đúng quy cách khách hỏi, có thể trả lời giá đó.
+- Nếu không tìm thấy giá, hoặc giá không rõ thuộc sản phẩm nào, hoặc có nhiều sản phẩm gần giống nhau, hãy hỏi thêm mã sản phẩm, link sản phẩm, hình ảnh, số lượng, điện áp, công suất, kích thước hoặc quy cách.
+- Nếu sau khi hỏi vẫn không đủ dữ liệu để báo giá chính xác, đề nghị khách liên hệ hotline/nhân viên để xác nhận.
+- Không tự bịa giá, tồn kho, bảo hành, khuyến mãi.
 
 ## XỬ LÝ KHI THỰC SỰ KHÔNG CÓ THÔNG TIN (FALLBACK):
 - CHỈ KHI BẠN ĐÃ TÌM KỸ và CHẮC CHẮN 100% không có bất kỳ dữ liệu nào liên quan đến CÂU HỎI MỚI NHẤT, bạn mới được phép trả lời:
@@ -110,6 +133,7 @@ async function getAIConfig(): Promise<AIConfig & ConversationContext> {
         id: "default",
         aiProvider: GEMINI_PROVIDER,
         aiModel: DEFAULT_GEMINI_MODEL,
+        ...DEFAULT_BUSINESS_SETTINGS,
       },
     });
   }
@@ -138,11 +162,11 @@ async function getCustomerProfileContext(customerId?: string | null): Promise<st
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
     select: {
-      hairHistory: true,
-      hairCondition: true,
+      email: true,
+      phone: true,
+      whatsapp: true,
+      tags: true,
       profileNotes: true,
-      bleachHistory: true,
-      previousStylist: true,
       preferences: true,
     },
   });
@@ -151,20 +175,20 @@ async function getCustomerProfileContext(customerId?: string | null): Promise<st
 
   const profile: string[] = [];
 
-  if (customer.hairHistory) {
-    profile.push(`- Lịch sử làm tóc: ${customer.hairHistory}`);
+  if (customer.phone) {
+    profile.push(`- Số điện thoại: ${customer.phone}`);
   }
-  if (customer.hairCondition) {
-    profile.push(`- Tình trạng tóc đã lưu: ${customer.hairCondition}`);
+  if (customer.email) {
+    profile.push(`- Email: ${customer.email}`);
   }
-  if (customer.bleachHistory !== "unknown") {
-    profile.push(`- Tóc đã từng tẩy: ${customer.bleachHistory === "yes" ? "có" : "chưa"}`);
+  if (customer.whatsapp) {
+    profile.push(`- WhatsApp: ${customer.whatsapp}`);
   }
-  if (customer.previousStylist) {
-    profile.push(`- Stylist cũ: ${customer.previousStylist}`);
+  if (customer.tags) {
+    profile.push(`- Nhãn khách hàng: ${customer.tags}`);
   }
   if (customer.preferences) {
-    profile.push(`- Sở thích: ${customer.preferences}`);
+    profile.push(`- Nhu cầu/sở thích đã lưu: ${customer.preferences}`);
   }
   if (customer.profileNotes) {
     profile.push(`- Ghi chú hồ sơ: ${customer.profileNotes}`);

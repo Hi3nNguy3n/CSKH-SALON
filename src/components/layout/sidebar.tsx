@@ -88,7 +88,7 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logo, setLogo] = useState("/owly.png");
-  const [name, setName] = useState("MinhHyHair");
+  const [name, setName] = useState("LED1000");
 
   useEffect(() => {
     fetch("/api/settings")

@@ -20,14 +20,14 @@ import {
 
 const STEPS = [
   "Tài khoản quản trị",
-  "Hồ sơ salon",
+  "Hồ sơ doanh nghiệp",
   "Luồng CSKH",
   "Cấu hình AI",
   "Hoàn tất",
 ];
 
 const TONE_OPTIONS = [
-  { value: "friendly", label: "Thân thiện", desc: "Nhẹ nhàng, dễ gần và dễ chốt lịch" },
+  { value: "friendly", label: "Thân thiện", desc: "Dễ gần, rõ ràng và phù hợp tư vấn sản phẩm" },
   { value: "professional", label: "Chuyên nghiệp", desc: "Rõ ràng, lịch sự và chỉn chu" },
   { value: "formal", label: "Trang trọng", desc: "Nghiêm túc hơn cho thương hiệu cao cấp" },
   { value: "technical", label: "Giải thích kỹ", desc: "Phù hợp tư vấn nhiều nghiệp vụ, kỹ thuật" },
@@ -42,9 +42,9 @@ const TRAINING_FORMATS = [
 ];
 
 const BOT_RESPONSIBILITIES = [
-  "Trả lời câu hỏi phổ biến về dịch vụ, giá khoảng và quy trình làm tóc.",
-  "Tư vấn ban đầu, hỏi thêm thông tin còn thiếu và gợi ý lịch hẹn.",
-  "Dùng dữ liệu từ bảng giá, FAQ, quy trình và chính sách để trả lời nhất quán.",
+  "Trả lời câu hỏi phổ biến về sản phẩm, giá và chính sách theo Knowledge Base.",
+  "Tư vấn ban đầu, hỏi thêm thông số còn thiếu và gợi ý hướng xử lý tiếp theo.",
+  "Dùng dữ liệu từ bảng giá, FAQ, catalogue, quy trình và chính sách để trả lời nhất quán.",
 ];
 
 const HUMAN_HANDOFF_CASES = [
@@ -54,13 +54,13 @@ const HUMAN_HANDOFF_CASES = [
 ];
 
 const CHAT_PREVIEW = [
-  { role: "customer", time: "20:52", content: "mình có đưa data training cho nó được không" },
-  { role: "customer", time: "21:07", content: "phải là file pdf, doc, excel á" },
+  { role: "customer", time: "20:52", content: "mình có đưa data training cho bot được không" },
+  { role: "customer", time: "21:07", content: "file PDF, Word, Excel hay bảng giá đều được hả" },
   {
     role: "assistant",
     time: "21:08",
     content:
-      "Dạ được chị nhé. Mình có thể chuẩn hóa nội dung từ file PDF, Word, Excel để làm nguồn tri thức cho bot tư vấn khách hàng. Những ca khó hoặc các trường hợp complain thì hệ thống sẽ ưu tiên chuyển nhân viên hỗ trợ xử lý.",
+      "Dạ được nhé. Mình có thể chuẩn hóa nội dung từ file PDF, Word, Excel để làm nguồn tri thức cho bot tư vấn khách hàng. Những ca thiếu dữ liệu, cần xác nhận giá/tồn kho hoặc có rủi ro kỹ thuật thì hệ thống sẽ ưu tiên chuyển nhân viên hỗ trợ.",
   },
 ];
 
@@ -81,7 +81,7 @@ export default function SetupPage() {
   const [businessName, setBusinessName] = useState("");
   const [businessDesc, setBusinessDesc] = useState("");
   const [welcomeMessage, setWelcomeMessage] = useState(
-    "Xin chào! Chào mừng bạn đến với Luna Women's Hair Studio. Bạn cần tư vấn bảng giá, tình trạng tóc hay đặt lịch làm tóc?"
+    "Xin chào! LED1000 có thể hỗ trợ bạn tìm đèn LED, nguồn điện, linh kiện hoặc phụ kiện phù hợp. Bạn cần dùng cho mục đích nào và có thông số điện áp/công suất chưa?"
   );
   const [tone, setTone] = useState<(typeof TONE_OPTIONS)[number]["value"]>("friendly");
 
@@ -170,7 +170,7 @@ export default function SetupPage() {
 
         if (!res.ok) {
           const data = await res.json();
-          setError(data.error || "Không thể lưu hồ sơ salon.");
+          setError(data.error || "Không thể lưu hồ sơ doanh nghiệp.");
           setLoading(false);
           return;
         }
@@ -302,16 +302,16 @@ export default function SetupPage() {
         {step === 1 && (
           <>
             <p className="mb-6 text-sm text-owly-text-light">
-              Cung cấp thông tin salon để AI giữ đúng giọng điệu và ngữ cảnh khi tư vấn.
+              Cung cấp thông tin doanh nghiệp để AI giữ đúng giọng điệu và ngữ cảnh khi tư vấn.
             </p>
 
             <div className="space-y-4">
               <Field
                 id="businessName"
-                label="Tên salon"
+                label="Tên doanh nghiệp"
                 value={businessName}
                 onChange={setBusinessName}
-                placeholder="Ví dụ: Luna Women's Hair Studio"
+                placeholder="Ví dụ: LED1000 / Linh Kiện LED1000"
               />
 
               <div>
@@ -326,7 +326,7 @@ export default function SetupPage() {
                   rows={3}
                   value={businessDesc}
                   onChange={(event) => setBusinessDesc(event.target.value)}
-                  placeholder="Mô tả ngắn về dịch vụ, phong cách và nhóm khách hàng bạn phục vụ"
+                  placeholder="Mô tả ngắn về sản phẩm, dịch vụ, phong cách tư vấn và nhóm khách hàng bạn phục vụ"
                   className="w-full resize-none rounded-lg border border-owly-border bg-owly-bg px-3.5 py-2.5 text-sm text-owly-text placeholder:text-owly-text-light transition-shadow focus:border-transparent focus:outline-none focus:ring-2 focus:ring-owly-primary"
                 />
               </div>
@@ -560,7 +560,7 @@ export default function SetupPage() {
               />
               <SummaryRow
                 done={completedSteps.includes(1)}
-                label="Đã cấu hình hồ sơ salon"
+                label="Đã cấu hình hồ sơ doanh nghiệp"
                 detail={businessName || "Dùng cấu hình mặc định"}
               />
               <SummaryRow

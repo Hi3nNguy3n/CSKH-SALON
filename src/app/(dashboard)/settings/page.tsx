@@ -439,7 +439,7 @@ function GeneralSection({
         <TextInput
           value={data.businessName}
           onChange={(v) => update("businessName", v)}
-          placeholder="Minh Hy Hair"
+          placeholder="LED1000 / Linh Kiện LED1000"
         />
       </FormField>
       <FormField label="Logo" description="Upload your business logo (Max 2MB). It will replace the default logo in the sidebar.">
@@ -452,7 +452,7 @@ function GeneralSection({
         <TextareaInput
           value={data.businessDesc}
           onChange={(v) => update("businessDesc", v)}
-          placeholder="Mô tả chi tiết về dịch vụ..."
+          placeholder="Mô tả sản phẩm, dịch vụ và nhóm khách hàng cần hỗ trợ..."
         />
       </FormField>
       <FormField label="Tin nhắn chào mừng" description="Tin nhắn đầu tiên gửi cho khách hàng mới.">
@@ -975,10 +975,10 @@ function InstagramSection({
 // ---------------------------------------------------------------------------
 
 const defaultSettings: SettingsData = {
-  businessName: "My Business",
-  businessDesc: "",
+  businessName: "LED1000 / Linh Kiện LED1000",
+  businessDesc: "Chuyên đèn LED, nguồn điện, linh kiện LED, phụ kiện chiếu sáng, đèn trang trí và thiết bị điện liên quan.",
   logoUrl: "",
-  welcomeMessage: "Hello! How can I help you today?",
+  welcomeMessage: "Xin chào! LED1000 có thể hỗ trợ bạn tìm đèn LED, nguồn điện, linh kiện hoặc phụ kiện phù hợp. Bạn cần dùng cho mục đích nào và có thông số điện áp/công suất chưa?",
   tone: "friendly",
   language: "auto",
   aiProvider: GEMINI_PROVIDER,

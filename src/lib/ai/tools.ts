@@ -285,11 +285,8 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
           phone: true,
           email: true,
           whatsapp: true,
-          hairHistory: true,
-          hairCondition: true,
           profileNotes: true,
-          bleachHistory: true,
-          previousStylist: true,
+          tags: true,
           preferences: true,
         },
       })
@@ -307,11 +304,8 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
           phone: true,
           email: true,
           whatsapp: true,
-          hairHistory: true,
-          hairCondition: true,
           profileNotes: true,
-          bleachHistory: true,
-          previousStylist: true,
+          tags: true,
           preferences: true,
         },
       });
@@ -339,11 +333,11 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
       profile: customer
         ? {
             name: customer.name,
-            hairHistory: customer.hairHistory,
-            hairCondition: customer.hairCondition,
+            phone: customer.phone,
+            email: customer.email,
+            whatsapp: customer.whatsapp,
+            tags: customer.tags,
             profileNotes: customer.profileNotes,
-            bleachHistory: customer.bleachHistory,
-            previousStylist: customer.previousStylist,
             preferences: customer.preferences,
           }
         : null,
@@ -377,11 +371,11 @@ async function getCustomerHistory(args: Record<string, unknown>): Promise<string
     profile: customer
       ? {
           name: customer.name,
-          hairHistory: customer.hairHistory,
-          hairCondition: customer.hairCondition,
+          phone: customer.phone,
+          email: customer.email,
+          whatsapp: customer.whatsapp,
+          tags: customer.tags,
           profileNotes: customer.profileNotes,
-          bleachHistory: customer.bleachHistory,
-          previousStylist: customer.previousStylist,
           preferences: customer.preferences,
         }
       : null,

@@ -203,6 +203,38 @@ describe("AI Tools", () => {
       expect(result.history).toHaveLength(0);
       expect(result.message).toContain("No previous conversations");
     });
+
+    it("should return generic customer profile fields without salon-specific hair fields", async () => {
+      mockPrisma.customer.findFirst.mockResolvedValue({
+        name: "Lan",
+        phone: "0909003082",
+        email: "lan@example.com",
+        whatsapp: "",
+        tags: "VIP",
+        profileNotes: "Hay mua LED dây ngoài trời",
+        preferences: "Ánh sáng vàng",
+      });
+      mockPrisma.conversation.findMany.mockResolvedValue([]);
+
+      const result = JSON.parse(
+        await executeToolCall("get_customer_history", {
+          customerContact: "0909003082",
+        })
+      );
+
+      expect(result.profile).toMatchObject({
+        name: "Lan",
+        phone: "0909003082",
+        email: "lan@example.com",
+        tags: "VIP",
+        profileNotes: "Hay mua LED dây ngoài trời",
+        preferences: "Ánh sáng vàng",
+      });
+      expect(result.profile).not.toHaveProperty("hairHistory");
+      expect(result.profile).not.toHaveProperty("hairCondition");
+      expect(result.profile).not.toHaveProperty("bleachHistory");
+      expect(result.profile).not.toHaveProperty("previousStylist");
+    });
   });
 
   describe("schedule_followup", () => {

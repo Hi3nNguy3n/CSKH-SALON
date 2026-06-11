@@ -44,6 +44,7 @@ describe("AI Engine", () => {
 
     // Default knowledge base
     mockPrisma.knowledgeEntry.findMany.mockResolvedValue([]);
+    mockPrisma.automationRule.findMany.mockResolvedValue([]);
 
     // Default conversation
     mockPrisma.conversation.findUnique.mockResolvedValue({
@@ -175,6 +176,83 @@ describe("AI Engine", () => {
     const systemMessage = callArgs.messages[0];
     expect(systemMessage.content).toContain("Return Policy");
     expect(systemMessage.content).toContain("30-day returns allowed");
+  });
+
+  it("should build a business-aware non-salon system prompt", async () => {
+    mockPrisma.settings.findFirst.mockResolvedValue({
+      id: "default",
+      businessName: "LED1000 / Linh Kiện LED1000",
+      businessDesc: "Chuyên đèn LED, nguồn điện, linh kiện LED và phụ kiện chiếu sáng.",
+      welcomeMessage: "Xin chào! LED1000 hỗ trợ chọn sản phẩm phù hợp.",
+      tone: "technical",
+      language: "vi",
+      aiProvider: "gemini",
+      aiModel: "gemini-2.5-flash",
+      aiApiKey: "sk-test",
+      maxTokens: 1000,
+      temperature: 0.7,
+    });
+
+    mockOpenAICreateFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { content: "Dạ LED1000 có thể hỗ trợ." },
+        },
+      ],
+    });
+
+    const { chat } = await import("@/lib/ai/engine");
+    await chat("conv-1", "Tôi cần adapter 12V");
+
+    const callArgs = mockOpenAICreateFn.mock.calls[0][0];
+    const systemMessage = callArgs.messages[0];
+    expect(systemMessage.content).toContain("trợ lý CSKH/tư vấn sản phẩm của LED1000");
+    expect(systemMessage.content).toContain("điện áp 5V/12V/24V/48V/220V");
+    expect(systemMessage.content).toContain("Không tự bịa giá, tồn kho, bảo hành, khuyến mãi");
+    expect(systemMessage.content).not.toContain("salon tóc");
+    expect(systemMessage.content).not.toContain("stylist");
+    expect(systemMessage.content).not.toContain("độ dài tóc");
+  });
+
+  it("should not inject salon-specific customer profile fields into prompt", async () => {
+    mockPrisma.conversation.findUnique.mockResolvedValue({
+      id: "conv-1",
+      channel: "whatsapp",
+      customerName: "Lan",
+      customerContact: "+1555",
+      customerId: "customer-1",
+      status: "active",
+      messages: [],
+    });
+    mockPrisma.customer.findUnique.mockResolvedValue({
+      phone: "0909003082",
+      email: "lan@example.com",
+      whatsapp: "",
+      tags: "VIP",
+      profileNotes: "Thường mua LED dây ngoài trời",
+      preferences: "Ưu tiên ánh sáng vàng",
+    });
+    mockOpenAICreateFn.mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "stop",
+          message: { content: "Dạ em đã ghi nhận." },
+        },
+      ],
+    });
+
+    const { chat } = await import("@/lib/ai/engine");
+    await chat("conv-1", "Bạn còn nhớ nhu cầu của tôi không?");
+
+    const callArgs = mockOpenAICreateFn.mock.calls[0][0];
+    const systemMessage = callArgs.messages[0];
+    expect(systemMessage.content).toContain("Thường mua LED dây ngoài trời");
+    expect(systemMessage.content).toContain("Ưu tiên ánh sáng vàng");
+    expect(systemMessage.content).not.toContain("Lịch sử làm tóc");
+    expect(systemMessage.content).not.toContain("Tình trạng tóc");
+    expect(systemMessage.content).not.toContain("Tóc đã từng tẩy");
+    expect(systemMessage.content).not.toContain("Stylist cũ");
   });
 
   it("should handle tool calls and recurse", async () => {

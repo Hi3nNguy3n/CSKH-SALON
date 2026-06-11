@@ -10,8 +10,8 @@ const inter = Quicksand({
 });
 
 export const metadata: Metadata = {
-  title: "SalonDesk - Trợ lý CSKH salon tóc",
-  description: "Nền tảng hỗ trợ khách hàng bằng AI dành cho salon tóc",
+  title: "CSKH-SALON - Trợ lý CSKH AI",
+  description: "Nền tảng hỗ trợ khách hàng bằng AI cho doanh nghiệp",
   icons: {
     icon: "/salondesk-logo.svg",
   },
