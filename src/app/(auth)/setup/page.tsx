@@ -228,7 +228,13 @@ export default function SetupPage() {
     <div className="overflow-hidden rounded-2xl border border-owly-border bg-owly-surface shadow-lg">
       <div className="border-b border-owly-border bg-owly-primary-50 px-8 pb-4 pt-6">
         <div className="mb-5 flex items-center gap-3">
-          <Image src="/linhkienled1000-logo.svg" alt="LED1000 CSKH" width={40} height={40} />
+          <Image
+            src="/led1000-logo.png"
+            alt="LED1000 CSKH"
+            width={116}
+            height={41}
+            className="h-10 w-auto rounded bg-white px-1 object-contain"
+          />
           <div>
             <h1 className="text-lg font-bold text-owly-text">Thiết lập LED1000 CSKH</h1>
             <p className="text-xs text-owly-text-light">

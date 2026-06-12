@@ -119,10 +119,10 @@ export default function GoLivePage() {
                       key={check.id}
                       href={check.href}
                       className={cn(
-                        "rounded-xl border p-4 transition-colors",
+                        "rounded-xl border bg-owly-surface p-4 transition-colors hover:border-owly-primary/30 hover:bg-owly-primary-50/35",
                         check.done
-                          ? "border-green-200 bg-green-50"
-                          : "border-amber-200 bg-amber-50"
+                          ? "border-owly-success/30"
+                          : "border-owly-warning/35"
                       )}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -130,15 +130,12 @@ export default function GoLivePage() {
                           <div
                             className={cn(
                               "p-2 rounded-lg",
-                              check.done ? "bg-green-100" : "bg-amber-100"
+                              check.done
+                                ? "bg-owly-success/10 text-owly-success"
+                                : "bg-owly-warning/10 text-owly-warning"
                             )}
                           >
-                            <Icon
-                              className={cn(
-                                "h-4 w-4",
-                                check.done ? "text-green-700" : "text-amber-700"
-                              )}
-                            />
+                            <Icon className="h-4 w-4" />
                           </div>
                           <div>
                             <p className="text-sm font-semibold text-owly-text">
@@ -150,9 +147,9 @@ export default function GoLivePage() {
                           </div>
                         </div>
                         {check.done ? (
-                          <CheckCircle className="h-5 w-5 text-green-700 flex-shrink-0" />
+                          <CheckCircle className="h-5 w-5 text-owly-success flex-shrink-0" />
                         ) : (
-                          <TriangleAlert className="h-5 w-5 text-amber-700 flex-shrink-0" />
+                          <TriangleAlert className="h-5 w-5 text-owly-warning flex-shrink-0" />
                         )}
                       </div>
                     </Link>

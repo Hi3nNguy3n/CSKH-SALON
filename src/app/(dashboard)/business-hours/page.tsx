@@ -247,45 +247,31 @@ export default function BusinessHoursPage() {
         <div className="max-w-3xl space-y-6">
           <div
             className={cn(
-              "flex items-center gap-3 p-4 rounded-xl border",
+              "flex items-center gap-3 rounded-xl border bg-owly-surface p-4 shadow-sm",
               currentStatus.open
-                ? "bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800"
-                : "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800"
+                ? "border-owly-success/30"
+                : "border-owly-warning/35"
             )}
           >
             <div
               className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-full",
+                "flex h-10 w-10 items-center justify-center rounded-lg",
                 currentStatus.open
-                  ? "bg-green-100 dark:bg-green-900/40"
-                  : "bg-amber-100 dark:bg-amber-900/40"
+                  ? "bg-owly-success/10 text-owly-success"
+                  : "bg-owly-warning/10 text-owly-warning"
               )}
             >
               {currentStatus.open ? (
-                <Check className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <Check className="h-5 w-5" />
               ) : (
-                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="h-5 w-5" />
               )}
             </div>
             <div>
-              <p
-                className={cn(
-                  "text-sm font-semibold",
-                  currentStatus.open
-                    ? "text-green-800 dark:text-green-300"
-                    : "text-amber-800 dark:text-amber-300"
-                )}
-              >
+              <p className="text-xs font-medium uppercase tracking-wide text-owly-text-light">
                 Trạng thái hiện tại
               </p>
-              <p
-                className={cn(
-                  "text-sm",
-                  currentStatus.open
-                    ? "text-green-700 dark:text-green-400"
-                    : "text-amber-700 dark:text-amber-400"
-                )}
-              >
+              <p className="mt-0.5 text-sm font-semibold text-owly-text">
                 {currentStatus.label}
               </p>
             </div>
