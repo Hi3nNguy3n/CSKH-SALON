@@ -75,4 +75,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"
 
+ENV DATABASE_URL="postgresql://admin:admin%40123@host.docker.internal:5432/owl"
+
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
