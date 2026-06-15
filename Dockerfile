@@ -10,6 +10,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 COPY . .
 
 RUN npx prisma generate
+ENV JWT_SECRET="dummy-secret-for-build-stage"
 RUN npm run build
 
 # ---- Runner stage ----
