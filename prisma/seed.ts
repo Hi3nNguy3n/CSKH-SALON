@@ -2,6 +2,10 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import {
+  LED1000_KNOWLEDGE_CATEGORIES,
+  LED1000_KNOWLEDGE_TEMPLATE_ENTRIES,
+} from "../src/lib/knowledge/led1000-taxonomy";
 
 const connectionString =
   process.env.DATABASE_URL ||
@@ -127,34 +131,30 @@ async function main() {
   }
 
   // Create knowledge base categories for LED1000
-  const categories = [
-    { id: "cat-faq", name: "FAQ", description: "Câu hỏi khách thường gặp", icon: "help-circle", color: "#4A7C9B", sortOrder: 0 },
-    { id: "cat-products", name: "Sản phẩm LED", description: "Đèn LED, nguồn điện, module, linh kiện và phụ kiện chiếu sáng", icon: "package", color: "#22C55E", sortOrder: 1 },
-    { id: "cat-policies", name: "Chính sách", description: "Giao hàng, bảo hành, đổi trả và hỗ trợ đơn hàng", icon: "shield", color: "#F59E0B", sortOrder: 2 },
-    { id: "cat-technical", name: "Tư vấn kỹ thuật", description: "Điện áp, công suất, tải nguồn, môi trường sử dụng và lắp đặt", icon: "zap", color: "#EC4899", sortOrder: 3 },
-  ];
+  const categories = LED1000_KNOWLEDGE_CATEGORIES;
 
   for (const c of categories) {
     await prisma.category.upsert({ where: { id: c.id }, update: c, create: c });
   }
 
   const entries = [
+    ...LED1000_KNOWLEDGE_TEMPLATE_ENTRIES,
     // FAQ
-    { id: "entry-1", categoryId: "cat-faq", title: "Thông tin LED1000", content: "LED1000 / Linh Kiện LED1000 chuyên đèn LED, nguồn điện, linh kiện LED, phụ kiện chiếu sáng, đèn trang trí và thiết bị điện liên quan.", priority: 10 },
-    { id: "entry-2", categoryId: "cat-faq", title: "Thông tin liên hệ", content: "Khách có thể liên hệ LED1000 qua hotline/Zalo 0909003082 hoặc 0972 90 25 25. Địa chỉ cần khách xác nhận trước production: 207 Vườn Lài, Phú Thọ Hòa, Q. Tân Phú, TP.HCM.", priority: 9 },
-    { id: "entry-6", categoryId: "cat-faq", title: "Thông tin cần hỏi khi tư vấn", content: "Khi khách hỏi sản phẩm chưa đủ rõ, cần hỏi thêm mục đích sử dụng, trong nhà/ngoài trời, điện áp, công suất/tải, chiều dài, màu ánh sáng, mức chống nước IP, số lượng và quy cách.", priority: 9 },
-    { id: "entry-7", categoryId: "cat-faq", title: "Quy tắc báo giá", content: "Chỉ báo giá khi Knowledge Base có giá cụ thể gắn với đúng sản phẩm hoặc đúng quy cách khách hỏi. Nếu giá không rõ hoặc có nhiều sản phẩm gần giống, hỏi thêm mã sản phẩm, link, hình ảnh, số lượng, điện áp, công suất, kích thước hoặc quy cách.", priority: 10 },
+    { id: "entry-1", categoryId: "cat-led1000-business-profile", title: "Thông tin LED1000", content: "LED1000 / Linh Kiện LED1000 chuyên đèn LED, nguồn điện, linh kiện LED, phụ kiện chiếu sáng, đèn trang trí và thiết bị điện liên quan.", priority: 10 },
+    { id: "entry-2", categoryId: "cat-led1000-business-profile", title: "Thông tin liên hệ", content: "Khách có thể liên hệ LED1000 qua hotline/Zalo 0909003082 hoặc 0972 90 25 25. Địa chỉ cần khách xác nhận trước production: 207 Vườn Lài, Phú Thọ Hòa, Q. Tân Phú, TP.HCM.", priority: 9 },
+    { id: "entry-6", categoryId: "cat-led1000-sales-scripts", title: "Thông tin cần hỏi khi tư vấn", content: "Khi khách hỏi sản phẩm chưa đủ rõ, cần hỏi thêm mục đích sử dụng, trong nhà/ngoài trời, điện áp, công suất/tải, chiều dài, màu ánh sáng, mức chống nước IP, số lượng và quy cách.", priority: 9 },
+    { id: "entry-7", categoryId: "cat-led1000-price-list", title: "Quy tắc báo giá", content: "Chỉ báo giá khi Knowledge Base có giá cụ thể gắn với đúng sản phẩm hoặc đúng quy cách khách hỏi. Nếu giá không rõ hoặc có nhiều sản phẩm gần giống, hỏi thêm mã sản phẩm, link, hình ảnh, số lượng, điện áp, công suất, kích thước hoặc quy cách.", priority: 10 },
     // Sản phẩm
-    { id: "entry-3", categoryId: "cat-products", title: "Nhóm sản phẩm chính", content: "Các nhóm sản phẩm thường gặp: nguồn tổng DC, nguồn adapter, nguồn 5V/12V/24V/48V, LED dây, LED thanh, LED quảng cáo, bóng đèn LED, đèn âm trần, đèn ốp trần, đèn tuýp LED, đèn pha LED, đèn năng lượng mặt trời, đèn trang trí và phụ kiện LED.", priority: 9 },
-    { id: "entry-8", categoryId: "cat-products", title: "Nguồn điện cho LED", content: "Khi tư vấn nguồn, cần biết điện áp LED, tổng công suất hoặc chiều dài/tải dự kiến, môi trường sử dụng và dự phòng công suất phù hợp. Với câu hỏi có rủi ro điện/thi công, nên khuyến nghị nhân viên kỹ thuật xác nhận.", priority: 10 },
-    { id: "entry-9", categoryId: "cat-products", title: "LED dây", content: "Khi tư vấn LED dây, cần hỏi điện áp 12V/24V/220V, chiều dài, màu ánh sáng, dùng trong nhà hay ngoài trời, có cần chống nước hay đổi màu RGB không, và mục đích như hắt trần, tủ kệ, bảng hiệu hoặc trang trí.", priority: 9 },
-    { id: "entry-10", categoryId: "cat-products", title: "Đèn trang trí và phụ kiện", content: "Đèn trang trí có thể cần thông tin về không gian sử dụng, chiều dài dây, màu ánh sáng, kiểu điều khiển, nguồn cấp và số lượng. Phụ kiện cần khớp đúng quy cách sản phẩm.", priority: 8 },
-    { id: "entry-11", categoryId: "cat-products", title: "Đèn năng lượng mặt trời", content: "Khi tư vấn đèn năng lượng mặt trời, cần hỏi vị trí lắp, công suất mong muốn, thời gian chiếu sáng, mức chống nước, diện tích chiếu sáng và nhu cầu đèn pha, đèn đường, sân vườn hay trang trí.", priority: 7 },
+    { id: "entry-3", categoryId: "cat-led1000-product-catalogue", title: "Nhóm sản phẩm chính", content: "Các nhóm sản phẩm thường gặp: nguồn tổng DC, nguồn adapter, nguồn 5V/12V/24V/48V, LED dây, LED thanh, LED quảng cáo, bóng đèn LED, đèn âm trần, đèn ốp trần, đèn tuýp LED, đèn pha LED, đèn năng lượng mặt trời, đèn trang trí và phụ kiện LED.", priority: 9 },
+    { id: "entry-8", categoryId: "cat-led1000-technical-guide", title: "Nguồn điện cho LED", content: "Khi tư vấn nguồn, cần biết điện áp LED, tổng công suất hoặc chiều dài/tải dự kiến, môi trường sử dụng và dự phòng công suất phù hợp. Với câu hỏi có rủi ro điện/thi công, nên khuyến nghị nhân viên kỹ thuật xác nhận.", priority: 10 },
+    { id: "entry-9", categoryId: "cat-led1000-product-catalogue", title: "LED dây", content: "Khi tư vấn LED dây, cần hỏi điện áp 12V/24V/220V, chiều dài, màu ánh sáng, dùng trong nhà hay ngoài trời, có cần chống nước hay đổi màu RGB không, và mục đích như hắt trần, tủ kệ, bảng hiệu hoặc trang trí.", priority: 9 },
+    { id: "entry-10", categoryId: "cat-led1000-product-catalogue", title: "Đèn trang trí và phụ kiện", content: "Đèn trang trí có thể cần thông tin về không gian sử dụng, chiều dài dây, màu ánh sáng, kiểu điều khiển, nguồn cấp và số lượng. Phụ kiện cần khớp đúng quy cách sản phẩm.", priority: 8 },
+    { id: "entry-11", categoryId: "cat-led1000-product-catalogue", title: "Đèn năng lượng mặt trời", content: "Khi tư vấn đèn năng lượng mặt trời, cần hỏi vị trí lắp, công suất mong muốn, thời gian chiếu sáng, mức chống nước, diện tích chiếu sáng và nhu cầu đèn pha, đèn đường, sân vườn hay trang trí.", priority: 7 },
     // Chính sách
-    { id: "entry-4", categoryId: "cat-policies", title: "Giao hàng và xác nhận đơn", content: "Nếu Knowledge Base chưa có chính sách giao hàng rõ cho đơn cụ thể, bot cần hỏi thêm địa chỉ, số lượng, sản phẩm và đề nghị nhân viên xác nhận.", priority: 8 },
-    { id: "entry-5", categoryId: "cat-policies", title: "Bảo hành và đổi trả", content: "Chỉ trả lời chính sách bảo hành/đổi trả theo thông tin có trong Knowledge Base. Nếu chưa có dữ liệu rõ, cần nói chưa có thông tin chính xác và chuyển nhân viên xác nhận.", priority: 7 },
+    { id: "entry-4", categoryId: "cat-led1000-return-policy", title: "Giao hàng và xác nhận đơn", content: "Nếu Knowledge Base chưa có chính sách giao hàng rõ cho đơn cụ thể, bot cần hỏi thêm địa chỉ, số lượng, sản phẩm và đề nghị nhân viên xác nhận.", priority: 8 },
+    { id: "entry-5", categoryId: "cat-led1000-warranty", title: "Bảo hành và đổi trả", content: "Chỉ trả lời chính sách bảo hành/đổi trả theo thông tin có trong Knowledge Base. Nếu chưa có dữ liệu rõ, cần nói chưa có thông tin chính xác và chuyển nhân viên xác nhận.", priority: 7 },
     // Tư vấn kỹ thuật
-    { id: "entry-12", categoryId: "cat-technical", title: "An toàn kỹ thuật điện", content: "Với lắp đặt nguồn, tải lớn, ngoài trời, chống nước hoặc đấu nối điện 220V, bot chỉ tư vấn ở mức thông tin và khuyến nghị nhân viên kỹ thuật/thợ đủ chuyên môn kiểm tra trước khi thi công.", priority: 8 },
+    { id: "entry-12", categoryId: "cat-led1000-technical-guide", title: "An toàn kỹ thuật điện", content: "Với lắp đặt nguồn, tải lớn, ngoài trời, chống nước hoặc đấu nối điện 220V, bot chỉ tư vấn ở mức thông tin và khuyến nghị nhân viên kỹ thuật/thợ đủ chuyên môn kiểm tra trước khi thi công.", priority: 8 },
   ];
 
   for (const e of entries) {

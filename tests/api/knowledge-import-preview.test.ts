@@ -43,7 +43,12 @@ describe("POST /api/knowledge/import/preview", () => {
     mockImportKnowledgeDocumentWithGemini.mockReset();
     mockPrisma.knowledgeEntry.create.mockReset?.();
     mockPrisma.settings.findFirst.mockReset?.();
+    mockPrisma.category.findMany.mockReset?.();
     mockPrisma.settings.findFirst.mockResolvedValue({ aiApiKey: "" });
+    mockPrisma.category.findMany.mockResolvedValue([
+      { id: "cat-led1000-price-list", name: "LED1000 - Bảng giá" },
+      { id: "cat-led1000-product-catalogue", name: "LED1000 - Catalogue sản phẩm" },
+    ]);
     mockImportKnowledgeDocument.mockResolvedValue({
       detectedType: "txt",
       warnings: ["Parser warning"],
@@ -96,6 +101,8 @@ describe("POST /api/knowledge/import/preview", () => {
     expect(data.previewCount).toBe(2);
     expect(data.lowConfidenceCount).toBe(1);
     expect(data.averageConfidence).toBeCloseTo(0.8);
+    expect(data.suggestedKnowledgeKind).toBe("price_list");
+    expect(data.suggestedCategoryId).toBe("cat-led1000-price-list");
     expect(data.warnings).toEqual(
       expect.arrayContaining([
         "Parser warning",
@@ -122,6 +129,7 @@ describe("POST /api/knowledge/import/preview", () => {
     expect(response.status).toBe(200);
     expect(data.sourceType).toBe("pdf-gemini");
     expect(data.chunkCount).toBe(1);
+    expect(data.suggestedCategoryName).toBe("LED1000 - Bảng giá");
     expect(data.sections[0]).toEqual(
       expect.objectContaining({
         title: "Adapter 12V 5A",

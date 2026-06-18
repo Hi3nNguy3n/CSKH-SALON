@@ -1,5 +1,8 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import crypto from "crypto";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client";
 
 type TestGroup =
   | "Business/contact"
@@ -19,7 +22,11 @@ interface CliOptions {
   jsonOutput: string;
   delayMs: number;
   timeoutMs: number;
+  start?: number;
+  limit?: number;
   apiKey?: string;
+  apiKeyFromDb?: boolean;
+  ensureApiKey?: boolean;
   cookie?: string;
 }
 
@@ -118,6 +125,8 @@ const OUT_OF_DOMAIN_ACCEPTANCE_PATTERNS = [
   /(tour|du lịch|vé máy bay|khách sạn)/i,
   /(mỹ phẩm|kem dưỡng|nước hoa)/i,
 ];
+const OUT_OF_DOMAIN_REFUSAL_PATTERN =
+  /(không\s+(?:hỗ trợ|có|kinh doanh|phải)|chưa\s+hỗ trợ|không phải là|không có dịch vụ|không thuộc|không chuyên)/i;
 const CONFIDENT_STOCK_PATTERN = /(hiện\s+)?(còn hàng|sẵn hàng|có sẵn|đang có hàng|hết hàng)/i;
 const UNCERTAINTY_PATTERN = /(chưa có|không có dữ liệu|không thấy|cần xác nhận|liên hệ|kiểm tra|mã sản phẩm|quy cách)/i;
 
@@ -304,9 +313,24 @@ function parseOptions(argv: string[]): CliOptions {
         options.timeoutMs = parseNonNegativeInteger(rawKey, requireValue(rawKey, nextValue));
         if (consumeNext) index += 1;
         break;
+      case "--limit":
+        options.limit = parseNonNegativeInteger(rawKey, requireValue(rawKey, nextValue));
+        if (consumeNext) index += 1;
+        break;
+      case "--start":
+        options.start = parsePositiveInteger(rawKey, requireValue(rawKey, nextValue));
+        if (consumeNext) index += 1;
+        break;
       case "--api-key":
         options.apiKey = requireValue(rawKey, nextValue);
         if (consumeNext) index += 1;
+        break;
+      case "--api-key-from-db":
+        options.apiKeyFromDb = true;
+        break;
+      case "--ensure-api-key":
+        options.apiKeyFromDb = true;
+        options.ensureApiKey = true;
         break;
       case "--cookie":
         options.cookie = requireValue(rawKey, nextValue);
@@ -344,6 +368,14 @@ function parseNonNegativeInteger(key: string, value: string): number {
   return parsed;
 }
 
+function parsePositiveInteger(key: string, value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer`);
+  }
+  return parsed;
+}
+
 function printHelp() {
   console.log(`Usage:
   npx tsx scripts/test-led1000-chatbot.ts --base-url=http://localhost:3000
@@ -355,26 +387,39 @@ Options:
   --json         JSON report path. Default: ${DEFAULT_OPTIONS.jsonOutput}
   --delay-ms     Delay between requests. Default: ${DEFAULT_OPTIONS.delayMs}
   --timeout-ms   Request timeout. Default: ${DEFAULT_OPTIONS.timeoutMs}
+  --start        Run from this 1-based test index. Default: 1.
+  --limit        Run only the first N test cases.
   --api-key      API key to send as X-API-Key. The value is never written to reports.
+  --api-key-from-db
+                 Load the newest active API key from the local database. The key is never printed.
+  --ensure-api-key
+                 Create a local active API key when none exists, then use it. The key is never printed.
   --cookie       Auth cookie. Accepts either the raw token or "linhkienled1000-token=...".
 `);
 }
 
 async function run() {
   const options = parseOptions(process.argv.slice(2));
+  if (options.apiKeyFromDb) {
+    options.apiKey = await loadApiKeyFromDb(options.ensureApiKey);
+  }
   const startedAt = new Date().toISOString();
   const results: TestResult[] = [];
+  const startIndex = Math.max((options.start || 1) - 1, 0);
+  const selectedCases = TEST_CASES.slice(startIndex);
+  const testCases =
+    options.limit && options.limit > 0 ? selectedCases.slice(0, options.limit) : selectedCases;
 
-  console.log(`Running ${TEST_CASES.length} LED1000 chatbot API tests against ${options.baseUrl}${options.endpoint}`);
+  console.log(`Running ${testCases.length} LED1000 chatbot API tests against ${options.baseUrl}${options.endpoint}`);
   console.log(`Auth: ${getAuthMethod(options)}`);
 
-  for (let index = 0; index < TEST_CASES.length; index += 1) {
-    const testCase = TEST_CASES[index];
+  for (let index = 0; index < testCases.length; index += 1) {
+    const testCase = testCases[index];
     const result = await runTestCase(testCase, options);
     results.push(result);
     console.log(`${result.status.toUpperCase().padEnd(6)} ${testCase.id} ${testCase.question}`);
 
-    if (index < TEST_CASES.length - 1 && options.delayMs > 0) {
+    if (index < testCases.length - 1 && options.delayMs > 0) {
       await delay(options.delayMs);
     }
   }
@@ -393,6 +438,43 @@ async function run() {
 
   if (report.runInfo.failed > 0) {
     process.exitCode = 1;
+  }
+}
+
+async function loadApiKeyFromDb(ensure = false): Promise<string> {
+  const connectionString =
+    process.env.DATABASE_URL ||
+    "postgresql://postgres:postgres@localhost:5432/linhkienled1000?schema=public";
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString }),
+  });
+
+  try {
+    const apiKey = await prisma.apiKey.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "desc" },
+      select: { key: true },
+    });
+
+    if (!apiKey?.key && ensure) {
+      const created = await prisma.apiKey.create({
+        data: {
+          name: "LED1000 Mock Chatbot Test",
+          key: `linhkienled1000_${crypto.randomBytes(32).toString("hex")}`,
+          isActive: true,
+        },
+        select: { key: true },
+      });
+      return created.key;
+    }
+
+    if (!apiKey?.key) {
+      throw new Error("No active API key found in database.");
+    }
+
+    return apiKey.key;
+  } finally {
+    await prisma.$disconnect();
   }
 }
 
@@ -522,9 +604,10 @@ function evaluateResponse(testCase: TestCase, response: string): Omit<TestResult
     const acceptsOutOfDomainRole = OUT_OF_DOMAIN_ACCEPTANCE_PATTERNS.some((pattern) =>
       pattern.test(response)
     );
+    const refusesOutOfDomainRole = OUT_OF_DOMAIN_REFUSAL_PATTERN.test(response);
     const steersToLed = matchedTerms(response, LED_STEERING_TERMS).length > 0;
 
-    if (acceptsOutOfDomainRole) {
+    if (acceptsOutOfDomainRole && !refusesOutOfDomainRole) {
       flags.push("accepts_out_of_domain_role");
       notes.push("Response appears to accept an unrelated business identity.");
     }

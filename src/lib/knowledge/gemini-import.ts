@@ -32,11 +32,18 @@ const GEMINI_KNOWLEDGE_TYPES = [
   "faq",
   "policy",
   "warranty",
+  "return_policy",
+  "delivery_policy",
+  "vat_invoice",
   "process",
   "service",
   "product",
+  "product_category",
+  "technical",
+  "inventory",
   "promotion",
   "membership",
+  "channel_accounts",
   "contact",
   "hours",
   "intro",
@@ -44,6 +51,26 @@ const GEMINI_KNOWLEDGE_TYPES = [
 ] as const;
 
 type GeminiKnowledgeType = (typeof GEMINI_KNOWLEDGE_TYPES)[number];
+
+const GEMINI_DOCUMENT_KINDS = [
+  "business_profile",
+  "product_catalogue",
+  "price_list",
+  "inventory",
+  "warranty_policy",
+  "return_policy",
+  "vat_invoice",
+  "delivery_policy",
+  "technical_guide",
+  "customer_segments",
+  "channel_accounts",
+  "sales_script",
+  "faq",
+  "mixed",
+  "unknown",
+] as const;
+
+type GeminiDocumentKind = (typeof GEMINI_DOCUMENT_KINDS)[number];
 
 type GeminiContentPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -86,6 +113,8 @@ interface GeminiKnowledgeResponse {
   chunks?: GeminiKnowledgeChunk[];
   warnings?: unknown[];
   summary?: unknown;
+  documentKind?: unknown;
+  extractionNotes?: unknown;
 }
 
 export async function importKnowledgeDocumentWithGemini(
@@ -125,7 +154,11 @@ export async function importKnowledgeDocumentWithGemini(
   const { jsonText, model } = await generateKnowledgeJson(prompt, apiKey, parts, warnings);
 
   const parsed = parseGeminiResponse(jsonText);
-  let sections = normalizeGeminiChunks(parsed.chunks || [], fileName, model);
+  const documentKind = normalizeGeminiDocumentKind(parsed.documentKind, fileName);
+  if (parsed.extractionNotes) {
+    warnings.push(`Ghi chú nhận diện tài liệu: ${String(parsed.extractionNotes).trim()}`);
+  }
+  let sections = normalizeGeminiChunks(parsed.chunks || [], fileName, model, documentKind);
 
   if (sections.length === 0) {
     throw new Error("Gemini không tạo được chunk kiến thức hợp lệ từ file này.");
@@ -162,6 +195,15 @@ function buildGeminiKnowledgePrompt(fileName: string, mimeType: string): string 
     "Hãy đọc tài liệu theo bố cục thị giác nếu có: bảng, tiêu đề, cột giá, ghi chú, FAQ, chính sách, thông số kỹ thuật, catalogue, hình ảnh có chữ.",
     "Nếu input là DOCX structured extract, hãy ưu tiên các bảng markdown [TABLE n], heading và marker ảnh [IMAGE n] để khôi phục ngữ cảnh.",
     "Mục tiêu là tạo các chunk độc lập, đúng ngữ cảnh, dễ dùng cho RAG.",
+    "Trước khi tách chunk, hãy nhận diện loại tài liệu tổng thể bằng documentKind để hệ thống gợi ý danh mục Knowledge Base phù hợp.",
+    "documentKind hợp lệ: business_profile, product_catalogue, price_list, inventory, warranty_policy, return_policy, vat_invoice, delivery_policy, technical_guide, customer_segments, channel_accounts, sales_script, faq, mixed, unknown.",
+    "Chiến lược đọc theo loại tài liệu:",
+    "- price_list: giữ từng dòng sản phẩm/quy cách/đơn vị/cột giá lẻ/giá công trình/giá cửa hàng hoặc đại lý, không tự suy giá.",
+    "- inventory: giữ mã hàng, tên hàng, tồn kho, tình trạng còn/hết, sản phẩm thay thế nếu có.",
+    "- warranty_policy, return_policy, delivery_policy, vat_invoice: giữ điều kiện áp dụng, ngoại lệ, thông tin cần khách cung cấp và quy trình xử lý.",
+    "- product_catalogue, technical_guide: giữ tên sản phẩm, mã, điện áp, công suất, kích thước, chống nước, môi trường dùng, ảnh/chữ trên ảnh nếu đọc được.",
+    "- customer_segments: giữ cách phân loại khách lẻ/khách công trình/cửa hàng/đại lý và dữ kiện cần hỏi trước khi báo giá.",
+    "- channel_accounts: giữ rõ nền tảng, tên tài khoản, link/số điện thoại/ID, trạng thái xác minh nếu có.",
     "Quy tắc:",
     "- Mỗi sản phẩm/nhóm sản phẩm/bảng giá/FAQ/chính sách/thông số kỹ thuật nên là một chunk riêng.",
     "- Không tạo chunk chỉ có giá mà thiếu tên sản phẩm, mã sản phẩm hoặc nhóm sản phẩm.",
@@ -173,11 +215,11 @@ function buildGeminiKnowledgePrompt(fileName: string, mimeType: string): string 
     "- Bỏ qua slogan/trang trí lặp lại nếu không giúp trả lời khách.",
     "- Không bịa dữ liệu không có trong file.",
     "- Viết tiếng Việt tự nhiên, giữ thuật ngữ sản phẩm/kỹ thuật/tiếng Anh cần thiết.",
-    "- Gán type đúng bản chất nội dung: price cho bảng giá, product cho sản phẩm, product_category cho nhóm sản phẩm, faq cho hỏi đáp, policy/warranty cho chính sách/bảo hành, technical cho thông số/tư vấn kỹ thuật, promotion cho ưu đãi, contact/hours cho liên hệ/thời gian, intro cho giới thiệu.",
+    "- Gán type đúng bản chất nội dung: price cho bảng giá, inventory cho tồn kho, product cho sản phẩm, product_category cho nhóm sản phẩm, faq cho hỏi đáp, policy/warranty/return_policy/delivery_policy/vat_invoice cho chính sách liên quan, technical cho thông số/tư vấn kỹ thuật, promotion cho ưu đãi, channel_accounts cho tài khoản kênh bán hàng, contact/hours cho liên hệ/thời gian, intro cho giới thiệu.",
     "- confidence từ 0 đến 1, thấp hơn nếu bảng bị mờ/khó đọc/không chắc.",
     "Chỉ trả JSON hợp lệ, không markdown.",
     "Schema:",
-    '{ "chunks": [ { "title": "string", "content": "string", "type": "price|faq|policy|warranty|process|service|product|promotion|membership|contact|hours|intro|note", "confidence": 0.0, "sourcePage": 1, "notes": "string optional" } ], "warnings": ["string"] }',
+    '{ "documentKind": "business_profile|product_catalogue|price_list|inventory|warranty_policy|return_policy|vat_invoice|delivery_policy|technical_guide|customer_segments|channel_accounts|sales_script|faq|mixed|unknown", "extractionNotes": "string optional", "chunks": [ { "title": "string", "content": "string", "type": "price|faq|policy|warranty|return_policy|delivery_policy|vat_invoice|process|service|product|product_category|technical|inventory|promotion|membership|channel_accounts|contact|hours|intro|note", "confidence": 0.0, "sourcePage": 1, "notes": "string optional" } ], "warnings": ["string"] }',
     `Tên file: ${fileName}`,
     `MIME type: ${mimeType}`,
   ].join("\n");
@@ -248,7 +290,8 @@ function errorMessage(error: unknown): string {
 function normalizeGeminiChunks(
   chunks: GeminiKnowledgeChunk[],
   fileName: string,
-  model: string
+  model: string,
+  documentKind: GeminiDocumentKind
 ): ImportedKnowledgeSection[] {
   return chunks.flatMap((chunk, index) => {
     const title = String(chunk.title || `${fileName} - Mục ${index + 1}`).trim();
@@ -266,6 +309,7 @@ function normalizeGeminiChunks(
         sourceFormat: "gemini-document",
         parserConfidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0.8,
         geminiType: type,
+        documentKind,
         geminiModel: model,
         ...(Number.isFinite(sourcePage) && sourcePage > 0 ? { sourcePage } : {}),
         ...(chunk.notes ? { geminiNotes: String(chunk.notes) } : {}),
@@ -276,12 +320,30 @@ function normalizeGeminiChunks(
   });
 }
 
+function normalizeGeminiDocumentKind(rawKind: unknown, fileName: string): GeminiDocumentKind {
+  const raw = normalizeKeyword(typeof rawKind === "string" ? rawKind : "").replace(/\s+/g, "_");
+  const directKind = GEMINI_DOCUMENT_KINDS.find((kind) => kind === raw);
+  if (directKind) return directKind;
+
+  const fileHint = normalizeKeyword(fileName);
+  if (/bang gia|bao gia|price|gia/.test(fileHint)) return "price_list";
+  if (/ton kho|inventory|stock|hang ton/.test(fileHint)) return "inventory";
+  if (/bao hanh|warranty/.test(fileHint)) return "warranty_policy";
+  if (/doi tra|return|refund/.test(fileHint)) return "return_policy";
+  if (/vat|hoa don|invoice|mst/.test(fileHint)) return "vat_invoice";
+  if (/catalogue|catalog|san pham|product/.test(fileHint)) return "product_catalogue";
+  if (/ky thuat|technical|thong so|lap dat/.test(fileHint)) return "technical_guide";
+  if (/facebook|zalo|shopee|channel|kenh/.test(fileHint)) return "channel_accounts";
+
+  return "unknown";
+}
+
 function normalizeGeminiType(
   rawType: unknown,
   title: string,
   content: string
 ): GeminiKnowledgeType {
-  const raw = normalizeKeyword(typeof rawType === "string" ? rawType : "");
+  const raw = normalizeKeyword(typeof rawType === "string" ? rawType : "").replace(/\s+/g, "_");
   const directType = GEMINI_KNOWLEDGE_TYPES.find((type) => type === raw);
   if (directType) return directType;
 
@@ -295,14 +357,24 @@ function normalizeGeminiType(
     qna: "faq",
     guarantee: "warranty",
     warranty_policy: "warranty",
+    vat: "vat_invoice",
+    invoice: "vat_invoice",
+    return: "return_policy",
+    delivery: "delivery_policy",
     procedure: "process",
     workflow: "process",
     package: "service",
     products: "product",
+    category: "product_category",
+    product_categories: "product_category",
+    stock: "inventory",
+    warehouse: "inventory",
     promo: "promotion",
     voucher: "promotion",
     member: "membership",
     vip: "membership",
+    channels: "channel_accounts",
+    social: "channel_accounts",
     address: "contact",
     opening_hours: "hours",
     duration: "hours",
@@ -313,9 +385,15 @@ function normalizeGeminiType(
   const haystack = normalizeKeyword(`${title}\n${content}`);
 
   if (/\b(faq|q&a|q:|a:)\b|cau hoi|tra loi/.test(haystack)) return "faq";
+  if (/vat|hoa don|xuat hoa don|ma so thue|mst/.test(haystack)) return "vat_invoice";
+  if (/ton kho|con hang|het hang|hang thay the|san pham thay the/.test(haystack)) {
+    return "inventory";
+  }
   if (/bao hanh|chinh sach|cam ket|khong ap dung|dieu kien|bao ro/.test(haystack)) {
     return haystack.includes("bao hanh") ? "warranty" : "policy";
   }
+  if (/doi tra|tra hang|doi hang|hoan tien/.test(haystack)) return "return_policy";
+  if (/giao hang|van chuyen|nhan hang|kiem hang/.test(haystack)) return "delivery_policy";
   if (/quy trinh|cac buoc|buoc \d|process|ritual/.test(haystack)) return "process";
   if (/hotline|dia chi|lien he|dat lich|website|social|facebook|instagram|tiktok/.test(haystack)) {
     return "contact";
@@ -334,8 +412,14 @@ function normalizeGeminiType(
   if (/bang gia|gia dich vu|price|gia:|vnd|vnđ/.test(haystack) || hasPriceTokens(content)) {
     return "price";
   }
+  if (/thong so|ky thuat|dien ap|cong suat|lap dat|chong nuoc|ip65|ip67/.test(haystack)) {
+    return "technical";
+  }
   if (/san pham|product|den led|led day|module|adapter|nguon|phu kien|linh kien/.test(haystack)) {
     return "product";
+  }
+  if (/facebook|zalo|shopee|lazada|kenh ban|fanpage|social/.test(haystack)) {
+    return "channel_accounts";
   }
   if (/gioi thieu|cam on|thuong hieu|dong hanh|hanh trinh/.test(haystack)) return "intro";
   if (/tu van|ky thuat|dien ap|cong suat|lap dat|bao gia/.test(haystack)) {
