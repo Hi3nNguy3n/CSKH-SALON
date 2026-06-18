@@ -6,7 +6,7 @@ services:
     container_name: linhkienled1000-app
     restart: unless-stopped
     ports:
-      - "3012:3000"
+      - "3020:3000"
     env_file:
       - .env
     environment:
