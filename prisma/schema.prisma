@@ -109,27 +109,31 @@ model TeamMember {
 }
 
 model Conversation {
-  id              String            @id @default(uuid())
-  channel         String
-  customerName    String            @default("Unknown")
-  customerContact String            @default("")
-  status          String            @default("active")
-  satisfaction    Int?
-  summary         String            @default("")
-  metadata        Json              @default("{}")
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  customerId      String?
-  customer        Customer?         @relation(fields: [customerId], references: [id])
-  tags            ConversationTag[]
-  notes           InternalNote[]
-  messages        Message[]
-  tickets         Ticket[]
+  id               String            @id @default(uuid())
+  channel          String
+  channelAccountId String?
+  customerName     String            @default("Unknown")
+  customerContact  String            @default("")
+  status           String            @default("active")
+  satisfaction     Int?
+  summary          String            @default("")
+  metadata         Json              @default("{}")
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  customerId       String?
+  customer         Customer?         @relation(fields: [customerId], references: [id])
+  channelAccount   ChannelAccount?   @relation(fields: [channelAccountId], references: [id], onDelete: SetNull)
+  tags             ConversationTag[]
+  notes            InternalNote[]
+  messages         Message[]
+  tickets          Ticket[]
 
   @@index([channel])
+  @@index([channelAccountId])
   @@index([status])
   @@index([customerContact])
   @@index([channel, status])
+  @@index([channel, channelAccountId])
   @@index([createdAt])
   @@index([customerId])
 }
@@ -211,6 +215,27 @@ model Channel {
   status    String   @default("disconnected")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ChannelAccount {
+  id                String         @id @default(uuid())
+  type              String
+  displayName       String         @default("")
+  externalAccountId String         @default("")
+  isActive          Boolean        @default(true)
+  isDefault         Boolean        @default(false)
+  config            Json           @default("{}")
+  status            String         @default("disconnected")
+  lastConnectedAt   DateTime?
+  lastError         String         @default("")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  conversations     Conversation[]
+
+  @@unique([type, externalAccountId])
+  @@index([type])
+  @@index([status])
+  @@index([isActive])
 }
 
 model Schedule {

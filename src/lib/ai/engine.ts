@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import type { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { owlyTools, executeToolCall } from "./tools";
 import { emitNewMessage } from "@/lib/realtime";
@@ -514,7 +515,11 @@ export async function createNewConversation(
   channel: string,
   customerName: string,
   customerContact: string,
-  customerId?: string
+  customerId?: string,
+  options: {
+    channelAccountId?: string | null;
+    metadata?: Record<string, unknown>;
+  } = {}
 ) {
   return prisma.conversation.create({
     data: {
@@ -522,6 +527,8 @@ export async function createNewConversation(
       customerName,
       customerContact,
       ...(customerId && { customerId }),
-    },
+      ...(options.channelAccountId && { channelAccountId: options.channelAccountId }),
+      ...(options.metadata && { metadata: options.metadata as Prisma.InputJsonValue }),
+    } as Prisma.ConversationUncheckedCreateInput,
   });
 }

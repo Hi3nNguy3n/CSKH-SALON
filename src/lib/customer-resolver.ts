@@ -19,8 +19,13 @@ function isRecord(value: unknown): value is MetadataRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isExternalContactChannel(channel: string): channel is "facebook" | "instagram" {
-  return channel === "facebook" || channel === "instagram";
+function isExternalContactChannel(channel: string): channel is "facebook" | "instagram" | "zalo" {
+  return channel === "facebook" || channel === "instagram" || channel === "zalo";
+}
+
+function isScopedExternalContact(channel: string, contact: string): boolean {
+  if (channel === "facebook" || channel === "instagram") return true;
+  return channel === "zalo" && contact.startsWith("zalo:");
 }
 
 function getExternalContact(metadata: unknown, channel: string): string | null {
@@ -143,9 +148,12 @@ async function findByChannelField(channel: string, contact: string) {
         where: { phone: contact },
       });
     case "zalo":
-      return prisma.customer.findFirst({
-        where: { phone: contact },
-      });
+      if (!isScopedExternalContact(channel, contact)) {
+        return prisma.customer.findFirst({
+          where: { phone: contact },
+        });
+      }
+    // fall through for scoped Zalo contacts
     case "facebook":
     case "instagram": {
       const candidates = await prisma.customer.findMany({
@@ -177,8 +185,10 @@ async function createCustomer(
       ...(channel === "email" ? { email: contact } : {}),
       ...(channel === "whatsapp" ? { whatsapp: contact } : {}),
       ...(channel === "phone" ? { phone: contact } : {}),
-      ...(channel === "zalo" ? { phone: contact } : {}),
-      ...(isExternalContactChannel(channel)
+      ...(channel === "zalo" && !isScopedExternalContact(channel, contact)
+        ? { phone: contact }
+        : {}),
+      ...(isScopedExternalContact(channel, contact)
         ? { metadata: mergeExternalContactMetadata({}, channel, contact) }
         : {}),
     },
@@ -213,8 +223,10 @@ async function updateExistingCustomer(
   if (channel === "email" && !customer.email) update.email = contact;
   if (channel === "whatsapp" && !customer.whatsapp) update.whatsapp = contact;
   if (channel === "phone" && !customer.phone) update.phone = contact;
-  if (channel === "zalo" && !customer.phone) update.phone = contact;
-  if (isExternalContactChannel(channel)) {
+  if (channel === "zalo" && !customer.phone && !isScopedExternalContact(channel, contact)) {
+    update.phone = contact;
+  }
+  if (isScopedExternalContact(channel, contact)) {
     update.metadata = mergeExternalContactMetadata(customer.metadata, channel, contact);
   }
 

@@ -20,6 +20,8 @@ import {
   EyeOff,
   ChevronLeft,
   ChevronRight,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -35,6 +37,18 @@ interface ChannelData {
   config: Record<string, unknown>;
   status: string;
   qr?: string | null;
+}
+
+interface ChannelAccountData {
+  id: string;
+  type: string;
+  displayName: string;
+  externalAccountId: string;
+  isActive: boolean;
+  isDefault: boolean;
+  config: Record<string, unknown>;
+  status: string;
+  lastError?: string;
 }
 
 type WhatsAppMode = "web" | "api";
@@ -1006,12 +1020,342 @@ function MetaChannelCard({
   );
 }
 
+
+
+// ---------------------------------------------------------------------------
+// Connected Accounts Panel
+// ---------------------------------------------------------------------------
+
+const ACCOUNT_TYPE_OPTIONS = ["facebook", "instagram", "zalo", "shopee"];
+
+type AccountFormState = {
+  type: string;
+  displayName: string;
+  externalAccountId: string;
+  verifyToken: string;
+  accessToken: string;
+  appSecret: string;
+  graphVersion: string;
+  cookiesInput: string;
+  pythonCommand: string;
+  scriptPath: string;
+  partnerId: string;
+  refreshToken: string;
+  partnerKey: string;
+  isDefault: boolean;
+  isActive: boolean;
+};
+
+function getAccountIdLabel(type: string) {
+  if (type === "facebook") return "Page ID";
+  if (type === "instagram") return "Business Account ID";
+  if (type === "zalo") return "Account/OA ID";
+  if (type === "shopee") return "Shop ID";
+  return "Account ID";
+}
+
+function getAccountConfigString(config: Record<string, unknown>, key: string): string {
+  const value = config[key];
+  return typeof value === "string" ? value : "";
+}
+
+function createEmptyAccountForm(type = "facebook"): AccountFormState {
+  return {
+    type,
+    displayName: "",
+    externalAccountId: "",
+    verifyToken: "",
+    accessToken: "",
+    appSecret: "",
+    graphVersion: "v25.0",
+    cookiesInput: "",
+    pythonCommand: "python3",
+    scriptPath: "zalo_bot.py",
+    partnerId: "",
+    refreshToken: "",
+    partnerKey: "",
+    isDefault: false,
+    isActive: true,
+  };
+}
+
+function loadAccountForm(account: ChannelAccountData): AccountFormState {
+  const config = account.config || {};
+  return {
+    ...createEmptyAccountForm(account.type),
+    displayName: account.displayName || "",
+    externalAccountId: account.externalAccountId || "",
+    verifyToken: getAccountConfigString(config, "verifyToken"),
+    graphVersion: getAccountConfigString(config, "graphVersion") || "v25.0",
+    pythonCommand: getAccountConfigString(config, "pythonCommand") || "python3",
+    scriptPath: getAccountConfigString(config, "scriptPath") || "zalo_bot.py",
+    partnerId: getAccountConfigString(config, "partnerId"),
+    isDefault: account.isDefault,
+    isActive: account.isActive,
+  };
+}
+
+function buildAccountConfig(form: AccountFormState): Record<string, unknown> {
+  const base = {
+    displayName: form.displayName,
+    externalAccountId: form.externalAccountId,
+  };
+
+  if (form.type === "facebook") {
+    return {
+      ...base,
+      pageId: form.externalAccountId,
+      verifyToken: form.verifyToken,
+      pageAccessToken: form.accessToken,
+      appSecret: form.appSecret,
+      graphVersion: form.graphVersion || "v25.0",
+    };
+  }
+
+  if (form.type === "instagram") {
+    return {
+      ...base,
+      businessAccountId: form.externalAccountId,
+      verifyToken: form.verifyToken,
+      accessToken: form.accessToken,
+      appSecret: form.appSecret,
+      graphVersion: form.graphVersion || "v25.0",
+    };
+  }
+
+  if (form.type === "zalo") {
+    return {
+      ...base,
+      accountId: form.externalAccountId,
+      cookiesInput: form.cookiesInput,
+      pythonCommand: form.pythonCommand || "python3",
+      scriptPath: form.scriptPath || "zalo_bot.py",
+    };
+  }
+
+  return {
+    ...base,
+    shopId: form.externalAccountId,
+    partnerId: form.partnerId,
+    accessToken: form.accessToken,
+    refreshToken: form.refreshToken,
+    partnerKey: form.partnerKey,
+  };
+}
+
+function SecretHint({ shown }: { shown: boolean }) {
+  if (!shown) return null;
+  return <p className="mt-1 text-[11px] text-owly-text-light">Để trống để giữ secret hiện có.</p>;
+}
+
+function ConnectedAccountsPanel({
+  accounts,
+  saving,
+  onSave,
+  onAction,
+  onDelete,
+}: {
+  accounts: ChannelAccountData[];
+  saving: boolean;
+  onSave: (id: string | null, payload: Record<string, unknown>) => Promise<void>;
+  onAction: (id: string, action: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState<AccountFormState>(() => createEmptyAccountForm());
+
+  const updateForm = <K extends keyof AccountFormState>(key: K, value: AccountFormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetForm = (nextType = form.type) => {
+    setEditingId(null);
+    setForm(createEmptyAccountForm(nextType));
+  };
+
+  const startEdit = (account: ChannelAccountData) => {
+    setEditingId(account.id);
+    setForm(loadAccountForm(account));
+  };
+
+  const handleSave = async () => {
+    const externalAccountId = form.externalAccountId.trim();
+    if (!externalAccountId) return;
+    const displayName = form.displayName.trim() || externalAccountId;
+    await onSave(editingId, {
+      type: form.type,
+      displayName,
+      externalAccountId,
+      isActive: form.isActive,
+      isDefault: form.isDefault || (!editingId && accounts.every((account) => account.type !== form.type)),
+      config: buildAccountConfig({ ...form, displayName, externalAccountId }),
+    });
+    resetForm(form.type);
+  };
+
+  const isEditing = Boolean(editingId);
+  const selectedAccount = editingId ? accounts.find((account) => account.id === editingId) : null;
+  const selectedConfig = selectedAccount?.config || {};
+  const hasAccessToken = Boolean(selectedConfig.hasPageAccessToken || selectedConfig.hasAccessToken);
+  const hasAppSecret = Boolean(selectedConfig.hasAppSecret);
+  const hasCookiesInput = Boolean(selectedConfig.hasCookiesInput);
+
+  return (
+    <div className="max-w-7xl rounded-xl border border-owly-border bg-owly-surface overflow-hidden">
+      <div className="px-5 py-4 border-b border-owly-border flex items-start justify-between gap-4">
+        <div>
+          <h3 className="font-semibold text-owly-text">Tài khoản kết nối</h3>
+          <p className="text-xs text-owly-text-light mt-1">
+            Quản lý nhiều Facebook Page, Instagram, Zalo account; Shopee giữ ở mức khai báo account.
+          </p>
+        </div>
+        <span className="text-xs px-2.5 py-1 rounded-full bg-owly-primary-50 text-owly-primary font-medium">
+          {accounts.length} account
+        </span>
+      </div>
+
+      <div className="p-5 space-y-5">
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-sm font-semibold text-owly-text">
+              {isEditing ? "Cập nhật tài khoản" : "Thêm tài khoản"}
+            </h4>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={() => resetForm()}
+                className="text-xs font-medium text-owly-text-light hover:text-owly-primary"
+              >
+                Hủy sửa
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-owly-text-light mb-1">Kênh</label>
+              <select
+                value={form.type}
+                disabled={isEditing}
+                onChange={(event) => resetForm(event.target.value)}
+                className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-bg text-owly-text focus:outline-none focus:ring-2 focus:ring-owly-primary/30 disabled:opacity-60"
+              >
+                {ACCOUNT_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+            <FieldInput label="Tên hiển thị" value={form.displayName} onChange={(value) => updateForm("displayName", value)} placeholder="LED1000 HCM" />
+            <FieldInput label={getAccountIdLabel(form.type)} value={form.externalAccountId} onChange={(value) => updateForm("externalAccountId", value)} placeholder="ID tài khoản" />
+            {(form.type === "facebook" || form.type === "instagram") && (
+              <FieldInput label="Verify token" value={form.verifyToken} onChange={(value) => updateForm("verifyToken", value)} isSecret />
+            )}
+          </div>
+
+          {(form.type === "facebook" || form.type === "instagram") && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <FieldInput label={form.type === "facebook" ? "Page access token" : "Access token"} value={form.accessToken} onChange={(value) => updateForm("accessToken", value)} isSecret />
+                <SecretHint shown={isEditing && hasAccessToken} />
+              </div>
+              <div>
+                <FieldInput label="App secret" value={form.appSecret} onChange={(value) => updateForm("appSecret", value)} isSecret />
+                <SecretHint shown={isEditing && hasAppSecret} />
+              </div>
+              <FieldInput label="Graph version" value={form.graphVersion} onChange={(value) => updateForm("graphVersion", value)} placeholder="v25.0" />
+            </div>
+          )}
+
+          {form.type === "zalo" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <FieldInput label="Cookies" value={form.cookiesInput} onChange={(value) => updateForm("cookiesInput", value)} isSecret />
+                <SecretHint shown={isEditing && hasCookiesInput} />
+              </div>
+              <FieldInput label="Python command" value={form.pythonCommand} onChange={(value) => updateForm("pythonCommand", value)} placeholder="python3" />
+              <FieldInput label="Script path" value={form.scriptPath} onChange={(value) => updateForm("scriptPath", value)} placeholder="zalo_bot.py" />
+            </div>
+          )}
+
+          {form.type === "shopee" && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <FieldInput label="Partner ID" value={form.partnerId} onChange={(value) => updateForm("partnerId", value)} />
+              <FieldInput label="Access token" value={form.accessToken} onChange={(value) => updateForm("accessToken", value)} isSecret />
+              <FieldInput label="Refresh token" value={form.refreshToken} onChange={(value) => updateForm("refreshToken", value)} isSecret />
+              <FieldInput label="Partner key" value={form.partnerKey} onChange={(value) => updateForm("partnerKey", value)} isSecret />
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-owly-border pt-4">
+            <div className="flex flex-wrap items-center gap-4 text-sm text-owly-text-light">
+              <label className="inline-flex items-center gap-2">
+                <input type="checkbox" checked={form.isActive} onChange={(event) => updateForm("isActive", event.target.checked)} />
+                Đang hoạt động
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input type="checkbox" checked={form.isDefault} onChange={(event) => updateForm("isDefault", event.target.checked)} />
+                Đặt làm mặc định cho kênh
+              </label>
+            </div>
+            <button
+              type="button"
+              disabled={saving || !form.externalAccountId.trim()}
+              onClick={handleSave}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              {isEditing ? "Lưu thay đổi" : "Thêm tài khoản"}
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {accounts.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-owly-border p-4 text-sm text-owly-text-light">
+              Chưa có tài khoản kết nối riêng. Các form kênh bên dưới vẫn là cấu hình mặc định/backward-compatible.
+            </div>
+          ) : (
+            accounts.map((account) => (
+              <div key={account.id} className="rounded-lg border border-owly-border p-4 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-owly-text truncate">{account.displayName || account.externalAccountId}</p>
+                    {account.isDefault && <span className="text-[11px] px-1.5 py-0.5 rounded bg-owly-primary-50 text-owly-primary">mặc định</span>}
+                    {!account.isActive && <span className="text-[11px] px-1.5 py-0.5 rounded bg-owly-danger/10 text-owly-danger">tắt</span>}
+                  </div>
+                  <p className="text-xs text-owly-text-light mt-1 capitalize">{account.type} • {account.externalAccountId}</p>
+                  <div className="mt-2"><StatusBadge status={account.status} /></div>
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button type="button" onClick={() => startEdit(account)} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title="Sửa">
+                    <Key className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => onAction(account.id, "test")} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title="Kiểm tra">
+                    <TestTube className="h-4 w-4" />
+                  </button>
+                  <button type="button" onClick={() => onAction(account.id, account.status === "connected" ? "disconnect" : "connect")} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title={account.status === "connected" ? "Ngắt kết nối" : "Kết nối"}>
+                    {account.status === "connected" ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
+                  </button>
+                  <button type="button" onClick={() => onDelete(account.id)} className="p-2 rounded-lg border border-owly-border text-owly-danger hover:bg-owly-danger/10" title="Xóa">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelData[]>([]);
+  const [accounts, setAccounts] = useState<ChannelAccountData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -1031,8 +1375,10 @@ export default function ChannelsPage() {
   const fetchChannels = useCallback(async () => {
     try {
       const res = await fetch("/api/channels");
+      const accountRes = await fetch("/api/channel-accounts");
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
+      if (accountRes.ok) setAccounts(await accountRes.json());
       const [whatsappRes, zaloRes] = await Promise.all([
         fetch("/api/channels/whatsapp"),
         fetch("/api/channels/zalo"),
@@ -1094,6 +1440,61 @@ export default function ChannelsPage() {
     }, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleSaveAccount = async (id: string | null, payload: Record<string, unknown>) => {
+    setSaving(true);
+    try {
+      const res = await fetch(id ? `/api/channel-accounts/${id}` : "/api/channel-accounts", {
+        method: id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Failed to save account");
+      }
+      const account = await res.json();
+      setAccounts((prev) =>
+        id
+          ? prev.map((item) => (item.id === account.id ? account : item))
+          : [account, ...prev.filter((item) => item.id !== account.id)]
+      );
+      showToast(id ? "Đã cập nhật tài khoản kết nối" : "Đã thêm tài khoản kết nối");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không lưu được tài khoản", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAccountAction = async (id: string, action: string) => {
+    try {
+      const res = await fetch(`/api/channel-accounts/${id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Action failed");
+      }
+      await fetchChannels();
+      showToast("Đã cập nhật trạng thái tài khoản");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Không xử lý được tài khoản", "error");
+    }
+  };
+
+  const handleDeleteAccount = async (id: string) => {
+    try {
+      const res = await fetch(`/api/channel-accounts/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed");
+      setAccounts((prev) => prev.filter((account) => account.id !== id));
+      showToast("Đã xóa tài khoản kết nối");
+    } catch {
+      showToast("Không xóa được tài khoản", "error");
+    }
+  };
 
   const handleSave = async (
     type: string,
@@ -1235,6 +1636,14 @@ export default function ChannelsPage() {
           </div>
         ) : (
           <div className="space-y-5">
+            <ConnectedAccountsPanel
+              accounts={accounts}
+              saving={saving}
+              onSave={handleSaveAccount}
+              onAction={handleAccountAction}
+              onDelete={handleDeleteAccount}
+            />
+
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl">
               {visibleChannelTypes.map(renderChannelCard)}
             </div>

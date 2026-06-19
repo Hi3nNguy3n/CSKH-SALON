@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { chat, createNewConversation } from "@/lib/ai/engine";
-import { resolveCustomer } from "@/lib/customer-resolver";
+import { handleExternalChannelMessage } from "@/lib/channels/external-message";
+
+function buildScopedZaloContact(sourceAccountId: string, contact: string): string {
+  return sourceAccountId && sourceAccountId !== "default"
+    ? `zalo:${sourceAccountId}:${contact}`
+    : contact;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,6 +16,7 @@ export async function POST(request: NextRequest) {
     const authorId = String(body?.authorId || "").trim();
     const threadId = String(body?.threadId || "").trim();
     const phoneNumber = String(body?.phoneNumber || "").trim();
+    const accountId = String(body?.accountId || "").trim();
     const displayName = String(body?.displayName || "").trim() || "Khách Zalo";
 
     if (!message) {
@@ -22,32 +28,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Customer contact is required" }, { status: 400 });
     }
 
-    const customerId = await resolveCustomer("zalo", customerContact, displayName);
+    let channelAccountId: string | null = null;
+    let sourceAccountId = accountId;
 
-    let conversation = await prisma.conversation.findFirst({
-      where: {
-        channel: "zalo",
-        status: { in: ["active", "escalated"] },
-        OR: [{ customerId }, { customerContact }],
-      },
-      orderBy: { updatedAt: "desc" },
-    });
-
-    if (!conversation) {
-      conversation = await createNewConversation(
-        "zalo",
-        displayName,
-        customerContact,
-        customerId
-      );
+    if (accountId && accountId !== "default") {
+      const account = await prisma.channelAccount.findFirst({
+        where: {
+          type: "zalo",
+          OR: [{ id: accountId }, { externalAccountId: accountId }],
+        },
+      });
+      channelAccountId = account?.id ?? null;
+      sourceAccountId = account?.externalAccountId || accountId;
     }
 
-    const response = await chat(conversation.id, message);
+    const result = await handleExternalChannelMessage({
+      channel: "zalo",
+      customerContact: buildScopedZaloContact(sourceAccountId, customerContact),
+      customerName: displayName,
+      channelAccountId,
+      sourceAccountId,
+      text: message,
+    });
 
     return NextResponse.json({
       success: true,
-      conversationId: conversation.id,
-      response,
+      conversationId: result.conversationId,
+      response: result.response,
     });
   } catch (error) {
     logger.error("[Zalo Incoming] Failed to process incoming message:", error);
@@ -57,4 +64,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

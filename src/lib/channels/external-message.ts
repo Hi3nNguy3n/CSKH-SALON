@@ -2,12 +2,14 @@ import { prisma } from "@/lib/prisma";
 import { chat, createNewConversation } from "@/lib/ai/engine";
 import { resolveCustomer } from "@/lib/customer-resolver";
 
-type ExternalChannel = "facebook" | "instagram";
+type ExternalChannel = "facebook" | "instagram" | "zalo";
 
 export async function handleExternalChannelMessage(input: {
   channel: ExternalChannel;
   customerContact: string;
   customerName?: string;
+  channelAccountId?: string | null;
+  sourceAccountId?: string;
   text: string;
 }): Promise<{
   conversationId: string;
@@ -24,9 +26,14 @@ export async function handleExternalChannelMessage(input: {
     throw new Error("Message text is required");
   }
 
+  const accountFilter = input.channelAccountId
+    ? { channelAccountId: input.channelAccountId }
+    : {};
+
   let conversation = await prisma.conversation.findFirst({
     where: {
       channel: input.channel,
+      ...accountFilter,
       customerContact,
       status: { in: ["active", "escalated"] },
     },
@@ -39,6 +46,7 @@ export async function handleExternalChannelMessage(input: {
     conversation = await prisma.conversation.findFirst({
       where: {
         channel: input.channel,
+        ...accountFilter,
         status: { in: ["active", "escalated"] },
         OR: [{ customerId }, { customerContact }],
       },
@@ -47,12 +55,27 @@ export async function handleExternalChannelMessage(input: {
   }
 
   if (!conversation) {
-    conversation = await createNewConversation(
-      input.channel,
-      customerName,
-      customerContact,
-      customerId
-    );
+    if (input.channelAccountId || input.sourceAccountId) {
+      conversation = await createNewConversation(
+        input.channel,
+        customerName,
+        customerContact,
+        customerId,
+        {
+          channelAccountId: input.channelAccountId,
+          metadata: input.sourceAccountId
+            ? { sourceAccountId: input.sourceAccountId }
+            : undefined,
+        }
+      );
+    } else {
+      conversation = await createNewConversation(
+        input.channel,
+        customerName,
+        customerContact,
+        customerId
+      );
+    }
   }
 
   const response = await chat(conversation.id, text);

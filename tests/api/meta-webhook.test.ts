@@ -200,8 +200,10 @@ describe("Meta webhook route", () => {
     expect(data).toEqual({ ok: true, received: 1 });
     expect(handleExternalChannelMessage).toHaveBeenCalledWith({
       channel: "facebook",
-      customerContact: "facebook:psid-1",
+      customerContact: "facebook:page-1:psid-1",
       customerName: "Facebook User",
+      channelAccountId: null,
+      sourceAccountId: "page-1",
       text: "Hello",
     });
     expect(fetch).toHaveBeenCalledWith(

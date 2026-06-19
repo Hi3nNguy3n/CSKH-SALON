@@ -12,6 +12,7 @@ import {
   sendZaloMessage,
   sendZaloImageMessage,
 } from "@/lib/channels/zalo";
+import { upsertDefaultChannelAccountFromChannel } from "@/lib/channels/accounts";
 
 type ZaloConfig = {
   pythonCommand?: string;
@@ -56,6 +57,13 @@ export async function PUT(request: NextRequest) {
         isActive: typeof isActive === "boolean" ? isActive : false,
         status: "disconnected",
       },
+    });
+
+    await upsertDefaultChannelAccountFromChannel({
+      type: "zalo",
+      config: channel.config,
+      isActive: channel.isActive,
+      status: channel.status,
     });
 
     return NextResponse.json(channel);

@@ -12,6 +12,7 @@ import {
 } from "@/lib/channels/hardening";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
+import { findChannelAccount } from "@/lib/channels/accounts";
 
 function getConfigString(config: unknown, key: string): string {
   if (typeof config !== "object" || config === null || Array.isArray(config)) return "";
@@ -24,11 +25,22 @@ function uniqueNonEmpty(values: Array<string | undefined>): string[] {
 }
 
 async function getMetaChannelConfigs() {
-  return prisma.channel.findMany({
-    where: { type: { in: ["facebook", "instagram"] } },
-    select: { config: true },
-    take: 2,
-  });
+  const [channels, accounts] = await Promise.all([
+    prisma.channel.findMany({
+      where: { type: { in: ["facebook", "instagram"] } },
+      select: { config: true },
+      take: 2,
+    }),
+    prisma.channelAccount.findMany({
+      where: { type: { in: ["facebook", "instagram"] }, isActive: true },
+      select: { config: true },
+    }),
+  ]);
+
+  return [
+    ...(Array.isArray(channels) ? channels : []),
+    ...(Array.isArray(accounts) ? accounts : []),
+  ];
 }
 
 async function getVerifyTokens(): Promise<string[]> {
@@ -68,22 +80,29 @@ function getEventTimeoutMs(): number {
 
 async function processMetaEvent(event: ReturnType<typeof parseMetaWebhookPayload>[number]) {
   const startedAt = Date.now();
+  const account = await findChannelAccount(event.channel, event.recipientId);
   const result = await handleExternalChannelMessage({
     channel: event.channel,
     customerContact: event.customerContact,
     customerName: event.customerName,
+    channelAccountId: account?.id ?? null,
+    sourceAccountId: event.recipientId,
     text: event.text,
   });
 
   await sendMetaTextMessage({
     channel: event.channel,
     recipientId: event.senderId,
+    channelAccountId: account?.id ?? null,
+    sourceAccountId: event.recipientId,
     text: result.response,
   });
 
   logger.info("[Meta Webhook] Processed event", {
     channel: event.channel,
     conversationId: result.conversationId,
+    channelAccountId: account?.id ?? null,
+    sourceAccountId: event.recipientId,
     durationMs: Date.now() - startedAt,
   });
 }
