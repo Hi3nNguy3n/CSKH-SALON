@@ -88,4 +88,76 @@ describe("Zalo incoming route", () => {
       text: "Xin chào",
     });
   });
+
+  it("accepts incoming when relaySecret matches configured Zalo account", async () => {
+    mockPrisma.channelAccount.findFirst.mockResolvedValue({
+      id: "zalo-account-db-id",
+      externalAccountId: "oa-led1000-hcm",
+      type: "zalo",
+      config: { relaySecret: "relay-secret-1" },
+    });
+
+    const { POST } = await import("@/app/api/channels/zalo/incoming/route");
+    const { handleExternalChannelMessage } = await import("@/lib/channels/external-message");
+
+    const response = await POST(
+      createRequest("/api/channels/zalo/incoming", {
+        method: "POST",
+        headers: { "x-zalo-relay-secret": "relay-secret-1" },
+        body: {
+          accountId: "zalo-account-db-id",
+          authorId: "zalo-user-1",
+          message: "Xin báo giá LED dây",
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(handleExternalChannelMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "zalo",
+        channelAccountId: "zalo-account-db-id",
+        sourceAccountId: "oa-led1000-hcm",
+      })
+    );
+  });
+
+  it("rejects incoming when relaySecret is configured but header is missing or wrong", async () => {
+    mockPrisma.channelAccount.findFirst.mockResolvedValue({
+      id: "zalo-account-db-id",
+      externalAccountId: "oa-led1000-hcm",
+      type: "zalo",
+      config: { relaySecret: "relay-secret-1" },
+    });
+
+    const { POST } = await import("@/app/api/channels/zalo/incoming/route");
+    const { handleExternalChannelMessage } = await import("@/lib/channels/external-message");
+
+    const missingHeaderResponse = await POST(
+      createRequest("/api/channels/zalo/incoming", {
+        method: "POST",
+        body: {
+          accountId: "zalo-account-db-id",
+          authorId: "zalo-user-1",
+          message: "Xin báo giá LED dây",
+        },
+      })
+    );
+
+    const wrongHeaderResponse = await POST(
+      createRequest("/api/channels/zalo/incoming", {
+        method: "POST",
+        headers: { "x-zalo-relay-secret": "wrong-secret" },
+        body: {
+          accountId: "zalo-account-db-id",
+          authorId: "zalo-user-1",
+          message: "Xin báo giá LED dây",
+        },
+      })
+    );
+
+    expect(missingHeaderResponse.status).toBe(401);
+    expect(wrongHeaderResponse.status).toBe(401);
+    expect(handleExternalChannelMessage).not.toHaveBeenCalled();
+  });
 });

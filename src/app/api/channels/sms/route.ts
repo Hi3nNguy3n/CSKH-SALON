@@ -22,9 +22,11 @@ export async function POST(request: NextRequest) {
     }
 
     const from = params.From || "";
+    const to = params.To || "";
+    const messageSid = params.MessageSid || "";
     const body = params.Body || "";
 
-    const response = await handleIncomingSms(from, body);
+    const response = await handleIncomingSms(from, body, { to, messageSid });
 
     // Return TwiML response
     const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${response}</Message></Response>`;

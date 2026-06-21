@@ -88,6 +88,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const explicitStatus = typeof body.status === "string" ? body.status : undefined;
+    const shopeeSavedStatus = type === "shopee" ? "config_saved" : undefined;
+    const nextUpdateStatus =
+      explicitStatus ||
+      (type === "shopee" && (!existing || existing.status === "disconnected") ? shopeeSavedStatus : undefined);
+    const nextCreateStatus = explicitStatus || shopeeSavedStatus || "disconnected";
+
     const account = await prisma.channelAccount.upsert({
       where: { type_externalAccountId: { type, externalAccountId } },
       update: {
@@ -95,7 +102,7 @@ export async function POST(request: NextRequest) {
         config: mergedConfig as Prisma.InputJsonValue,
         isActive: typeof body.isActive === "boolean" ? body.isActive : undefined,
         isDefault,
-        status: typeof body.status === "string" ? body.status : undefined,
+        status: nextUpdateStatus,
         lastError: "",
       },
       create: {
@@ -105,7 +112,7 @@ export async function POST(request: NextRequest) {
         config: mergedConfig as Prisma.InputJsonValue,
         isActive: typeof body.isActive === "boolean" ? body.isActive : true,
         isDefault,
-        status: typeof body.status === "string" ? body.status : "disconnected",
+        status: nextCreateStatus,
       },
     });
 

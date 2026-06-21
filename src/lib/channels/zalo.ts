@@ -10,6 +10,7 @@ interface ZaloConfig {
   pythonCommand?: string;
   scriptPath?: string;
   cookiesInput?: string;
+  relaySecret?: string;
 }
 
 function toJsonConfig(config: ZaloConfig): Record<string, string> {
@@ -17,6 +18,7 @@ function toJsonConfig(config: ZaloConfig): Record<string, string> {
     pythonCommand: config.pythonCommand || "",
     scriptPath: config.scriptPath || "",
     cookiesInput: config.cookiesInput || "",
+    relaySecret: config.relaySecret || "",
   };
 }
 
@@ -240,18 +242,13 @@ export async function startZaloBot(config: ZaloConfig, accountId?: string) {
   const pythonCommand = config.pythonCommand?.trim() || "python3";
   const scriptPath = resolveScriptPath(config.scriptPath);
   const normalizedAccountId = normalizeAccountId(accountId);
-  const runtimeDir = getRuntimeDir(accountId);
 
   runtime.status = "disconnected";
   runtime.message = `Starting Zalo bot with ${pythonCommand}...`;
 
   const child = spawn(pythonCommand, [scriptPath], {
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      ZALO_RUNTIME_DIR: runtimeDir,
-      ZALO_ACCOUNT_ID: normalizedAccountId,
-    },
+    env: getZaloSpawnEnv(accountId, config),
   });
 
   runtime.process = child;
@@ -301,11 +298,17 @@ export async function stopZaloBot(accountId?: string) {
   return getZaloStatus(accountId);
 }
 
-function getZaloSpawnEnv(accountId?: string): NodeJS.ProcessEnv {
+function getRelaySecret(config?: ZaloConfig): string {
+  return config?.relaySecret?.trim() || "";
+}
+
+function getZaloSpawnEnv(accountId?: string, config?: ZaloConfig): NodeJS.ProcessEnv {
+  const relaySecret = getRelaySecret(config);
   return {
     ...process.env,
     ZALO_RUNTIME_DIR: getRuntimeDir(accountId),
     ZALO_ACCOUNT_ID: normalizeAccountId(accountId),
+    ...(relaySecret ? { ZALO_RELAY_SECRET: relaySecret } : {}),
   };
 }
 
@@ -326,7 +329,7 @@ export async function sendZaloMessage(
       [scriptPath, "send", "--phone", phoneNumber, "--message", message],
       {
         cwd: process.cwd(),
-        env: getZaloSpawnEnv(accountId),
+        env: getZaloSpawnEnv(accountId, config),
       }
     );
 
@@ -383,7 +386,7 @@ export async function sendZaloImageMessage(
       ],
       {
         cwd: process.cwd(),
-        env: getZaloSpawnEnv(accountId),
+        env: getZaloSpawnEnv(accountId, config),
       }
     );
 

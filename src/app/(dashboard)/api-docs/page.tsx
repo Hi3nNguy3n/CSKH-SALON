@@ -661,6 +661,242 @@ const apiSections: ApiSection[] = [
     endpoints: [],
   },
   {
+    id: "shopee-setup-guide",
+    name: "Shopee Setup Guide",
+    icon: Download,
+    notes: [
+      "Current app status: Shopee runtime scaffolding is implemented: account config, shop authorization start/callback, token exchange/refresh helper, webhook receiver, tolerant chat payload parser, normalized inbound handoff, and outbound send adapter. A saved or authorized account is not the same as production-ready; final verification still requires a real Shopee Partner App, an existing legitimate Seller shop, approved scopes, and an end-to-end buyer chat test.",
+      "Goal status: To make the bot answer real Shopee buyers, LED1000 needs an existing legitimate Shopee Seller/admin account, Shopee Open Platform partner app, approved scopes, and a real end-to-end buyer message test.",
+      "Official docs status: Shopee Open Platform docs and exact scopes can be gated by partner login. Treat the official docs and partner console as the source of truth for endpoint names, permission review, token lifetime, and message policy.",
+      "Security: Never paste real partner_key, access_token, refresh_token, request signatures, tax/business verification data, or buyer personal data into chat, screenshots, public docs, logs, or Git commits.",
+    ],
+    guideGroups: [
+      {
+        title: "1. What exists in LinhKienLed1000 today",
+        items: [
+          "ChannelAccount supports type=shopee and can store one or more Shopee shops.",
+          "The account form supports Shop ID, Partner ID, Access Token, Refresh Token, and Partner Key.",
+          "GET responses mask Shopee secrets with flags such as hasAccessToken, hasRefreshToken, and hasPartnerKey.",
+          "NormalizedInboundMessage already has channel=shopee and the Shopee webhook route maps buyer messages into that shared handler.",
+          "/api/webhooks/shopee receives Shopee push/webhook payloads and processes supported text chat events.",
+          "The Shopee send-message adapter signs outbound calls and attempts to send the AI response back to the buyer chat.",
+        ],
+      },
+      {
+        title: "2. Shopee prerequisites",
+        items: [
+          "Use an existing legitimate LED1000/customer-owned Shopee Seller account. This app does not create Shopee shops and a normal buyer account is not enough.",
+          "Make sure the setup user has admin permission for the Shopee shop that will receive customer chat.",
+          "Create or obtain a Shopee Open Platform developer/partner account. If Shopee requires seller, tax, identity, or business verification, complete that process inside Shopee/Seller Center; the app cannot bypass it and must not use fake verification data.",
+          "Create a partner app in Shopee Open Platform for LinhKienLed1000.",
+          "Prepare the public HTTPS app URL. In production use the deployed customer domain; for local verification use an HTTPS tunnel only for testing.",
+          "Confirm the required modules/scopes in Shopee Open Platform: shop authorization, product/listing, order, push/webhook, and chat/customer-service messaging if available for the app.",
+          "Confirm Shopee policy allows automatic replies for this shop/app category before enabling fully automated chatbot replies.",
+        ],
+      },
+      {
+        title: "3. URLs to configure",
+        items: [
+          "Redirect URL base: https://<your-app-domain>/api/channels/shopee/auth/callback.",
+          "The actual callback must include accountId. Do not call the callback by hand; save the Shopee account in LinhKienLed1000 and use the generated auth start URL so accountId is attached correctly.",
+          "Webhook URL: https://<your-app-domain>/api/webhooks/shopee.",
+          "Use a public HTTPS domain. Localhost only works through a temporary HTTPS tunnel for testing.",
+        ],
+      },
+      {
+        title: "4. Connection state labels used by this app",
+        items: [
+          "config_saved: shop/account placeholder and non-secret config were saved, but authorization has not started.",
+          "authorization_required: admin clicked connect and must finish Shopee Seller authorization in Shopee.",
+          "authorized: access_token, refresh_token, and shop_id were saved after Shopee callback; webhook/chat are not verified yet.",
+          "webhook_verified: a signed Shopee webhook was accepted. This is not enough by itself for chat production readiness.",
+          "chat_receive_verified: a Shopee buyer chat payload reached the normalized inbound flow.",
+          "chat_send_verified: the app attempted and confirmed a send-message API call succeeded for a buyer chat.",
+          "production_ready: only use after scopes, webhook, receive, send, token refresh, logs, and staff handoff have been verified with the customer shop.",
+          "error: the account needs operator review. Do not treat it as connected.",
+        ],
+      },
+      {
+        title: "5. Understand Shopee values",
+        items: [
+          "Partner ID: public numeric/app identifier from the Shopee Open Platform partner app.",
+          "Partner Key: secret key used to sign Shopee API requests. Store it only in masked secret config.",
+          "Shop ID: Shopee shop identifier after the seller authorizes the partner app.",
+          "Access Token: token used for signed shop API calls after authorization.",
+          "Refresh Token: token used to rotate/refresh the access token before expiry.",
+          "Redirect URL: public URL Shopee redirects to after seller authorization. Use <APP_ORIGIN>/api/channels/shopee/auth/callback?accountId=<CHANNEL_ACCOUNT_ID> unless a custom redirectUrl is configured.",
+          "Webhook/Push URL: public HTTPS endpoint Shopee calls for events. Use <APP_ORIGIN>/api/webhooks/shopee.",
+        ],
+      },
+      {
+        title: "6. In-app steps",
+        items: [
+          "1. Open Channels -> Accounts -> Add Shopee.",
+          "2. Enter a display name and Shop ID placeholder if known.",
+          "3. Enter Partner ID and Partner Key from Shopee Open Platform. Do not paste these into logs or screenshots.",
+          "4. Save the config. The status should be config_saved.",
+          "5. Click Ủy quyền shop/Kết nối. The browser redirects to Shopee authorization.",
+          "6. Log in as the legitimate Shopee Seller/admin and approve the Partner App.",
+          "7. After callback, the app stores access_token, refresh_token, and shop_id. The status should be authorized, not production-ready.",
+          "8. Configure the webhook URL in Shopee Open Platform.",
+          "9. Send a buyer message test from Shopee chat.",
+          "10. Check status/debug: webhook_verified, chat_receive_verified, and chat_send_verified should appear as each stage succeeds.",
+        ],
+      },
+      {
+        title: "7. Runtime pieces implemented in this app",
+        items: [
+          "Shopee signing helper builds OpenAPI v2-style HMAC signatures for auth, token, and signed API calls.",
+          "/api/channels/shopee/auth/start redirects the admin browser to Shopee shop authorization.",
+          "/api/channels/shopee/auth/callback exchanges the authorization code for access_token, refresh_token, and shop_id.",
+          "Tokens are stored per ChannelAccount config and masked in admin/API responses. After successful token exchange the account status is authorized, which only means credentials were saved.",
+          "Token refresh helper is available and the send adapter checks tokenExpiresAt before sending; if the token is near expiry it attempts refresh-on-demand without logging tokens.",
+          "No scheduler/cron is included yet. Production should add a cron/queue after token lifetime is verified in Shopee console.",
+          "/api/webhooks/shopee receives events and verifies HMAC signatures when webhookSecret or partnerKey is configured.",
+          "Incoming buyer text events are mapped into NormalizedInboundMessage with channel=shopee.",
+          "Call processNormalizedInboundMessage() to create/update customer conversation and get the AI response.",
+          "Shopee outbound send-message adapter signs and sends the AI response back to the buyer chat.",
+          "Idempotency key helper exists for channel + shop_id + message_id/conversation_id and is stored as safe metadata. Durable storage-backed dedupe is still required before production go-live.",
+          "Known gap: rate-limit/backoff and production alerting should be tuned after real Shopee response codes are observed.",
+        ],
+      },
+      {
+        title: "8. Target runtime flow after implementation",
+        items: [
+          "Buyer sends message in Shopee chat.",
+          "Shopee Push/Webchat Push calls <APP_ORIGIN>/api/webhooks/shopee.",
+          "LinhKienLed1000 verifies request signature and finds ChannelAccount by shop_id.",
+          "Shopee payload maps to NormalizedInboundMessage: channel=shopee, channelAccountId, externalCustomerId, customerContact=shopee:<buyer_id>, externalConversationId, platformMessageId, text.",
+          "processNormalizedInboundMessage() resolves customer, finds or creates the conversation, calls chat(), and returns the AI response.",
+          "Shopee send adapter signs a send-message API request and sends the bot response back to Shopee.",
+          "The Conversations page shows platform=Shopee, shop/account name, buyer identity, status, and the message history.",
+        ],
+      },
+      {
+        title: "9. Testing checklist",
+        items: [
+          "Unit test Shopee signing helper with official examples from Shopee console/docs.",
+          "Unit test token refresh without printing tokens.",
+          "API test webhook signature rejection for invalid/missing signature.",
+          "API test incoming chat payload creates a conversation with channel=shopee and channelAccountId set.",
+          "API test duplicate event id is ignored or does not send a second reply.",
+          "API test outbound send adapter builds signed request with the correct shop_id/access_token but never logs secrets.",
+          "End-to-end test with a real Shopee test shop: buyer sends message -> bot creates conversation -> bot sends reply.",
+        ],
+      },
+      {
+        title: "10. Troubleshooting",
+        items: [
+          "Cannot create partner app: the business may need a verified Shopee Open Platform partner/developer account.",
+          "Seller authorization fails: check redirect URL, app status, region, and shop admin permission.",
+          "401/403 from Shopee: token expired, app lacks scope, signature is wrong, or shop authorization was revoked.",
+          "Webhook not received: check public HTTPS URL, Shopee push configuration, firewall, tunnel, and app approval state.",
+          "Webhook received but no bot reply: check payload mapping, AI provider/API key, Knowledge Base data, and Shopee send-message scope.",
+          "Bot replies twice: check webhook retry idempotency by event id/message id.",
+          "Can read product/order data but cannot chat: chat/customer-service API may require separate scope or approval.",
+        ],
+      },
+      {
+        title: "11. Go-live gate",
+        items: [
+          "Do not tell the customer Shopee chatbot is production-ready until a real buyer message test passes end to end: webhook received, conversation created, AI response generated, and reply sent back to Shopee.",
+          "Confirm exact Shopee scopes and automated messaging policy inside the customer partner console.",
+          "Confirm token refresh works for more than one token cycle; send adapter has refresh-on-demand, but production still needs scheduler/monitoring.",
+          "Confirm webhook signature verification is enabled in production.",
+          "Confirm logs never expose partner_key, access_token, refresh_token, signatures, or raw buyer personal data.",
+          "Confirm durable idempotency/dedupe is enabled so Shopee webhook retries do not create duplicate bot replies.",
+          "Confirm rate-limit/backoff plan for Shopee API failures.",
+          "Confirm staff handoff/ticket creation works for messages the bot cannot answer safely.",
+        ],
+      },
+    ],
+    links: [
+      {
+        label: "Shopee Open Platform",
+        url: "https://open.shopee.com/",
+      },
+      {
+        label: "Shopee API Calls",
+        url: "https://open.shopee.com/developer-guide/16",
+      },
+      {
+        label: "Shopee Push Mechanism",
+        url: "https://open.shopee.com/developer-guide/18",
+      },
+      {
+        label: "Shopee Authorization Process",
+        url: "https://open.shopee.com/developer-guide/20",
+      },
+      {
+        label: "Shopee Order Management",
+        url: "https://open.shopee.com/developer-guide/229",
+      },
+      {
+        label: "Shopee Product Price Guide",
+        url: "https://open.shopee.com/developer-guide/223",
+      },
+      {
+        label: "Shopee Platform Partner Rules",
+        url: "https://open.shopee.com/developer-guide/34",
+      },
+    ],
+    endpoints: [
+      {
+        method: "GET",
+        path: "/api/channels/shopee/auth/start",
+        description:
+          "Start Shopee shop authorization for a saved Shopee ChannelAccount. This route redirects the admin browser to Shopee Open Platform authorization.",
+        queryParams: [
+          {
+            name: "accountId",
+            type: "string",
+            required: true,
+            description: "Internal ChannelAccount id for the Shopee shop placeholder/config.",
+          },
+        ],
+        responseExample: "302 Redirect to Shopee authorization URL",
+      },
+      {
+        method: "GET",
+        path: "/api/channels/shopee/auth/callback",
+        description:
+          "Shopee redirects here after seller authorization. The route exchanges code + shop_id for access_token and refresh_token, stores them in the Shopee ChannelAccount, then redirects back to /channels/accounts.",
+        queryParams: [
+          { name: "accountId", type: "string", required: true, description: "Internal ChannelAccount id." },
+          { name: "code", type: "string", required: true, description: "Authorization code returned by Shopee." },
+          { name: "shop_id", type: "string", required: true, description: "Authorized Shopee shop id." },
+        ],
+        responseExample: "302 Redirect to /channels/accounts?channel=shopee&status=authorized",
+      },
+      {
+        method: "POST",
+        path: "/api/webhooks/shopee",
+        description:
+          "Receive Shopee push/webhook payloads. Supported text chat events are mapped into the normalized inbound handler, then the Shopee send adapter attempts to reply to the buyer chat.",
+        headers: [
+          {
+            name: "authorization / x-shopee-signature / x-shopee-hmac-sha256 / x-shopee-sign",
+            type: "header",
+            required: false,
+            description:
+              "Webhook HMAC signature header. Required when webhookSecret or partnerKey is configured for the Shopee ChannelAccount.",
+          },
+        ],
+        requestBody: {
+          code: "chat_push",
+          shop_id: 1001,
+          data: {
+            buyer_id: 2002,
+            conversation_id: "conv-1",
+            message_id: "msg-1",
+            message: { text: "Có LED dây COB không?" },
+          },
+        },
+        responseExample: { ok: true, received: 1, processed: 1, sent: 1 },
+      },
+    ],
+  },
+  {
     id: "meta-shared-webhook",
     name: "Meta Shared Webhook",
     icon: Webhook,
@@ -1554,7 +1790,7 @@ export default function ApiDocsPage() {
                 {currentSection.links && (
                   <div>
                     <h4 className="text-xs font-semibold text-owly-text-light uppercase tracking-wider mb-2">
-                      Official Meta Docs
+                      Official Docs
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {currentSection.links.map((link) => (

@@ -1,5 +1,18 @@
 type UnknownRecord = Record<string, unknown>;
 
+const CHANNEL_SECRET_FIELDS: Record<string, string[]> = {
+  facebook: ["pageAccessToken", "appSecret"],
+  instagram: ["accessToken", "appSecret"],
+  zalo: ["cookiesInput", "relaySecret"],
+  whatsapp: ["apiKey", "whatsappApiKey"],
+  email: ["smtpPass", "imapPass"],
+  phone: ["twilioToken", "elevenLabsKey"],
+  sms: ["twilioToken"],
+  telegram: ["botToken", "telegramBotToken"],
+  shopee: ["accessToken", "refreshToken", "partnerKey"],
+  tiktok_shop: ["accessToken", "refreshToken", "clientSecret", "appSecret", "webhookSecret"],
+};
+
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -40,6 +53,60 @@ export function sanitizeChannelConfig(type: string, config: unknown): unknown {
     };
   }
 
+  if (type === "zalo") {
+    return {
+      accountId: getString(config, "accountId"),
+      oaId: getString(config, "oaId"),
+      displayName: getString(config, "displayName"),
+      pythonCommand: getString(config, "pythonCommand"),
+      scriptPath: getString(config, "scriptPath"),
+      hasCookiesInput: !isBlankOrMaskedSecret(config.cookiesInput),
+      hasRelaySecret: !isBlankOrMaskedSecret(config.relaySecret),
+    };
+  }
+
+  if (type === "whatsapp") {
+    return {
+      mode: getString(config, "mode"),
+      phoneNumber: getString(config, "phoneNumber"),
+      hasApiKey:
+        !isBlankOrMaskedSecret(config.apiKey) ||
+        !isBlankOrMaskedSecret(config.whatsappApiKey),
+    };
+  }
+
+  if (type === "email") {
+    return {
+      smtpHost: getString(config, "smtpHost"),
+      smtpPort: getString(config, "smtpPort"),
+      smtpUser: getString(config, "smtpUser"),
+      smtpFrom: getString(config, "smtpFrom"),
+      imapHost: getString(config, "imapHost"),
+      imapPort: getString(config, "imapPort"),
+      imapUser: getString(config, "imapUser"),
+      hasSmtpPass: !isBlankOrMaskedSecret(config.smtpPass),
+      hasImapPass: !isBlankOrMaskedSecret(config.imapPass),
+    };
+  }
+
+  if (type === "phone" || type === "sms") {
+    return {
+      twilioSid: getString(config, "twilioSid"),
+      twilioPhone: getString(config, "twilioPhone"),
+      elevenLabsVoice: getString(config, "elevenLabsVoice"),
+      hasTwilioToken: !isBlankOrMaskedSecret(config.twilioToken),
+      hasElevenLabsKey: !isBlankOrMaskedSecret(config.elevenLabsKey),
+    };
+  }
+
+  if (type === "telegram") {
+    return {
+      hasBotToken:
+        !isBlankOrMaskedSecret(config.botToken) ||
+        !isBlankOrMaskedSecret(config.telegramBotToken),
+    };
+  }
+
   return config;
 }
 
@@ -57,8 +124,6 @@ export function mergeChannelConfigPreservingSecrets(
   incomingConfig: unknown,
   existingConfig: unknown
 ): unknown {
-  if (type !== "facebook" && type !== "instagram") return incomingConfig;
-
   const incoming = isRecord(incomingConfig) ? incomingConfig : {};
   const existing = isRecord(existingConfig) ? existingConfig : {};
   const merged: UnknownRecord = { ...existing, ...incoming };
@@ -73,14 +138,8 @@ export function mergeChannelConfigPreservingSecrets(
     }
   };
 
-  if (type === "facebook") {
-    preserveSecret("pageAccessToken");
-    preserveSecret("appSecret");
-  }
-
-  if (type === "instagram") {
-    preserveSecret("accessToken");
-    preserveSecret("appSecret");
+  for (const key of CHANNEL_SECRET_FIELDS[type] || []) {
+    preserveSecret(key);
   }
 
   return merged;

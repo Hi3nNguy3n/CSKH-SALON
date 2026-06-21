@@ -10,6 +10,10 @@ import {
   sanitizeChannelAccountForClient,
 } from "@/lib/channels/accounts";
 import { getZaloStatus, startZaloBot, stopZaloBot } from "@/lib/channels/zalo";
+import {
+  buildShopeeAuthStartUrlForAccount,
+  getShopeeAccountReadiness,
+} from "@/lib/channels/shopee";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -104,8 +108,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     if (account.type === "zalo") {
+      const config = account.config as Record<string, string>;
       if (action === "connect") {
-        const status = await startZaloBot(account.config as Record<string, string>, account.id);
+        const status = await startZaloBot(config, account.id);
         return NextResponse.json({ id, type: account.type, ...status });
       }
       if (action === "disconnect") {
@@ -113,6 +118,57 @@ export async function POST(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ id, type: account.type, ...status });
       }
       return NextResponse.json({ id, type: account.type, ...getZaloStatus(account.id) });
+    }
+
+    if (account.type === "shopee") {
+      if (action === "disconnect") {
+        const updated = await prisma.channelAccount.update({
+          where: { id },
+          data: { status: "disconnected" },
+        });
+        return NextResponse.json({
+          ...sanitizeChannelAccountForClient(updated),
+          message: `${updated.displayName || updated.type} disconnected`,
+        });
+      }
+
+      if (action === "connect") {
+        const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || request.nextUrl.origin;
+        const authUrl = buildShopeeAuthStartUrlForAccount({
+          accountId: account.id,
+          config: account.config,
+          origin,
+        });
+        const updated = await prisma.channelAccount.update({
+          where: { id },
+          data: { status: "authorization_required" },
+        });
+        return NextResponse.json({
+          ...sanitizeChannelAccountForClient(updated),
+          status: "authorization_required",
+          authUrl,
+          message: "Mở Shopee để chủ shop cấp quyền. Trạng thái này chưa phải sẵn sàng production.",
+        });
+      }
+
+      const readiness = getShopeeAccountReadiness(account.config);
+      if (!readiness.ok) {
+        return NextResponse.json(
+          {
+            error: `Shopee account is missing: ${readiness.missing.join(", ")}`,
+            missing: readiness.missing,
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        id,
+        type: account.type,
+        status: account.status,
+        ready: true,
+        message: "Shopee account has authorized credentials. Webhook receive and chat send still need real end-to-end verification.",
+      });
     }
 
     const nextStatus = action === "connect" || action === "test" ? "connected" : "disconnected";

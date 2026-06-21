@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { isBlankOrMaskedSecret, sanitizeChannelConfig } from "@/lib/channels/config";
+import {
+  isBlankOrMaskedSecret,
+  sanitizeChannelConfig,
+} from "@/lib/channels/config";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -70,6 +73,7 @@ export function sanitizeChannelAccountConfig(type: string, config: unknown): unk
       pythonCommand: getString(config, "pythonCommand"),
       scriptPath: getString(config, "scriptPath"),
       hasCookiesInput: !isBlankOrMaskedSecret(config.cookiesInput),
+      hasRelaySecret: !isBlankOrMaskedSecret(config.relaySecret),
     };
   }
 
@@ -78,9 +82,19 @@ export function sanitizeChannelAccountConfig(type: string, config: unknown): unk
       shopId: getString(config, "shopId"),
       displayName: getString(config, "displayName"),
       partnerId: getString(config, "partnerId"),
+      apiBaseUrl: getString(config, "apiBaseUrl"),
+      authBaseUrl: getString(config, "authBaseUrl"),
+      sendMessagePath: getString(config, "sendMessagePath"),
+      tokenExpiresAt: getString(config, "tokenExpiresAt"),
+      refreshTokenExpiresAt: getString(config, "refreshTokenExpiresAt"),
+      integrationStatus: getString(config, "integrationStatus"),
+      lastWebhookAt: getString(config, "lastWebhookAt"),
+      lastChatReceiveAt: getString(config, "lastChatReceiveAt"),
+      lastChatSendAt: getString(config, "lastChatSendAt"),
       hasAccessToken: !isBlankOrMaskedSecret(config.accessToken),
       hasRefreshToken: !isBlankOrMaskedSecret(config.refreshToken),
       hasPartnerKey: !isBlankOrMaskedSecret(config.partnerKey),
+      hasWebhookSecret: !isBlankOrMaskedSecret(config.webhookSecret),
     };
   }
 
@@ -125,11 +139,13 @@ export function mergeAccountConfigPreservingSecrets(
   }
   if (type === "zalo") {
     preserveSecret("cookiesInput");
+    preserveSecret("relaySecret");
   }
   if (type === "shopee") {
     preserveSecret("accessToken");
     preserveSecret("refreshToken");
     preserveSecret("partnerKey");
+    preserveSecret("webhookSecret");
   }
 
   return merged;

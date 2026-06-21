@@ -33,9 +33,12 @@ export function formatRelativeTime(date: Date | string): string {
 export function getChannelLabel(channel: string): string {
   const labels: Record<string, string> = {
     whatsapp: "WhatsApp",
+    facebook: "Facebook",
+    instagram: "Instagram",
     zalo: "Zalo",
     email: "Email",
     phone: "Điện thoại",
+    api: "API",
     widget: "Website",
   };
   return labels[channel] || channel;
