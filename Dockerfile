@@ -9,6 +9,7 @@ RUN npm config set registry https://registry.npmmirror.com && \
 
 COPY . .
 
+ENV DATABASE_URL="postgresql://dummy"
 RUN npx prisma generate
 ENV JWT_SECRET="dummy-secret-for-build-stage"
 RUN npm run build
