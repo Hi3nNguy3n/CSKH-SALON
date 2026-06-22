@@ -6,13 +6,14 @@ import {
 
 type UnknownRecord = Record<string, unknown>;
 
-export type AccountChannelType = "facebook" | "instagram" | "zalo" | "shopee";
+export type AccountChannelType = "facebook" | "instagram" | "zalo" | "shopee" | "tiktok_shop";
 
 export const ACCOUNT_CHANNEL_TYPES: AccountChannelType[] = [
   "facebook",
   "instagram",
   "zalo",
   "shopee",
+  "tiktok_shop",
 ];
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -48,6 +49,13 @@ export function getExternalAccountId(type: string, config: unknown): string {
   }
   if (type === "shopee") {
     return getString(config, "shopId") || getString(config, "externalAccountId");
+  }
+  if (type === "tiktok_shop") {
+    return (
+      getString(config, "shopId") ||
+      getString(config, "sellerId") ||
+      getString(config, "externalAccountId")
+    );
   }
   return getString(config, "externalAccountId");
 }
@@ -91,6 +99,18 @@ export function sanitizeChannelAccountConfig(type: string, config: unknown): unk
       lastWebhookAt: getString(config, "lastWebhookAt"),
       lastChatReceiveAt: getString(config, "lastChatReceiveAt"),
       lastChatSendAt: getString(config, "lastChatSendAt"),
+      lastWebhookEventType: getString(config, "lastWebhookEventType"),
+      lastWebhookShopId: getString(config, "lastWebhookShopId"),
+      lastWebhookPayloadKeys: Array.isArray(config.lastWebhookPayloadKeys)
+        ? config.lastWebhookPayloadKeys.filter((value): value is string => typeof value === "string")
+        : [],
+      lastWebhookMessageId: getString(config, "lastWebhookMessageId"),
+      lastWebhookConversationId: getString(config, "lastWebhookConversationId"),
+      lastWebhookBuyerIdPresent: config.lastWebhookBuyerIdPresent === true,
+      lastWebhookTextPresent: config.lastWebhookTextPresent === true,
+      lastWebhookParseStatus: getString(config, "lastWebhookParseStatus"),
+      lastWebhookError: getString(config, "lastWebhookError"),
+      lastShopeeIdempotencyKey: getString(config, "lastShopeeIdempotencyKey"),
       hasAccessToken: !isBlankOrMaskedSecret(config.accessToken),
       hasRefreshToken: !isBlankOrMaskedSecret(config.refreshToken),
       hasPartnerKey: !isBlankOrMaskedSecret(config.partnerKey),
@@ -98,6 +118,41 @@ export function sanitizeChannelAccountConfig(type: string, config: unknown): unk
     };
   }
 
+  if (type === "tiktok_shop") {
+    return {
+      shopId: getString(config, "shopId"),
+      sellerId: getString(config, "sellerId"),
+      displayName: getString(config, "displayName"),
+      appKey: getString(config, "appKey"),
+      clientKey: getString(config, "clientKey"),
+      apiBaseUrl: getString(config, "apiBaseUrl"),
+      authBaseUrl: getString(config, "authBaseUrl"),
+      authorizationUrl: getString(config, "authorizationUrl"),
+      sendMessagePath: getString(config, "sendMessagePath"),
+      tokenExpiresAt: getString(config, "tokenExpiresAt"),
+      refreshTokenExpiresAt: getString(config, "refreshTokenExpiresAt"),
+      integrationStatus: getString(config, "integrationStatus"),
+      lastWebhookAt: getString(config, "lastWebhookAt"),
+      lastChatReceiveAt: getString(config, "lastChatReceiveAt"),
+      lastChatSendAt: getString(config, "lastChatSendAt"),
+      lastWebhookEventType: getString(config, "lastWebhookEventType"),
+      lastWebhookShopId: getString(config, "lastWebhookShopId"),
+      lastWebhookPayloadKeys: Array.isArray(config.lastWebhookPayloadKeys)
+        ? config.lastWebhookPayloadKeys.filter((value): value is string => typeof value === "string")
+        : [],
+      lastWebhookMessageId: getString(config, "lastWebhookMessageId"),
+      lastWebhookConversationId: getString(config, "lastWebhookConversationId"),
+      lastWebhookBuyerIdPresent: config.lastWebhookBuyerIdPresent === true,
+      lastWebhookTextPresent: config.lastWebhookTextPresent === true,
+      lastWebhookParseStatus: getString(config, "lastWebhookParseStatus"),
+      lastWebhookError: getString(config, "lastWebhookError"),
+      lastTikTokShopIdempotencyKey: getString(config, "lastTikTokShopIdempotencyKey"),
+      hasAccessToken: !isBlankOrMaskedSecret(config.accessToken),
+      hasRefreshToken: !isBlankOrMaskedSecret(config.refreshToken),
+      hasAppSecret: !isBlankOrMaskedSecret(config.appSecret),
+      hasWebhookSecret: !isBlankOrMaskedSecret(config.webhookSecret),
+    };
+  }
   return sanitizeChannelConfig(type, config);
 }
 
@@ -145,6 +200,12 @@ export function mergeAccountConfigPreservingSecrets(
     preserveSecret("accessToken");
     preserveSecret("refreshToken");
     preserveSecret("partnerKey");
+    preserveSecret("webhookSecret");
+  }
+  if (type === "tiktok_shop") {
+    preserveSecret("accessToken");
+    preserveSecret("refreshToken");
+    preserveSecret("appSecret");
     preserveSecret("webhookSecret");
   }
 

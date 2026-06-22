@@ -6,6 +6,30 @@ This document records how channel connection settings are stored and exposed aft
 
 This phase is storage and hardening only. It does not change chatbot prompts, crawler behavior, Knowledge Base import, or database schema.
 
+
+## Readiness and go-live language
+
+The API Docs page now treats channel setup as staged readiness instead of a binary connected/not-connected state.
+
+Important wording:
+
+```txt
+Authorized != production-ready.
+Connected != proof that a real customer can receive a bot reply.
+```
+
+Use these high-level readiness labels when speaking with lead/customer:
+
+- Web widget / API: available when deployment, auth, AI provider, and Knowledge Base are stable.
+- Facebook / Instagram: near-ready only after real Meta webhook/send E2E and app permission checks.
+- Zalo Python relay: current operational relay/session-cookie mode, not official OA API.
+- Zalo Official OA: future phase, not current runtime.
+- Shopee: pre-E2E ready; requires real Seller account, Open Platform Partner App, approved scopes, webhook receive, send reply, token refresh, idempotency, and fallback checks before production-ready.
+- TikTok Shop: pre-E2E inbound scaffold; requires real Partner Center app, Customer Service/message scopes, official webhook/signature contract, send-message endpoint, token behavior, and real buyer chat E2E before production-ready.
+- WhatsApp, Email, Phone/Twilio, SMS, Telegram: available or partial depending on configured credentials and real provider E2E tests.
+
+The app cannot bypass seller verification, business/tax/bank checks, app review, partner approval, API scopes, or platform policy. It also must not store or expose raw secrets, signatures, raw webhook payloads, or buyer personal data in debug metadata.
+
 ## Current database models
 
 `Settings` stores global application settings and several legacy/default integration credentials, including AI, email, phone/Twilio, WhatsApp, and Telegram fields. These values are masked before being sent to the client through the settings API.
@@ -237,9 +261,9 @@ Use `externalAccountId` as `shopId`. `partnerKey`, `accessToken`, `refreshToken`
 
 Pre-production gaps remain: durable storage-backed idempotency, scheduler/monitoring for token refresh, rate-limit/backoff policy, and a real Shopee Seller/Partner App end-to-end chat test.
 
-### Future TikTok Shop
+### TikTok Shop pre-E2E scaffold
 
-TikTok Shop should use `ChannelAccount.config` only. Phase 7.1 does not add TikTok Shop runtime behavior.
+TikTok Shop uses `ChannelAccount.config` only. The app supports `type=tiktok_shop`, masked account config, safe webhook debug metadata, and inbound customer-service message handoff into `processNormalizedInboundMessage()`. Real OAuth/callback and outbound send must still be verified with TikTok Shop Partner Center before go-live.
 
 Suggested config shape:
 
@@ -247,16 +271,21 @@ Suggested config shape:
 {
   "shopId": "tiktok-shop-id",
   "sellerId": "seller-id",
-  "appKey": "app-key",
-  "clientSecret": "secret",
+  "appKey": "app-or-client-key",
+  "clientKey": "app-or-client-key",
+  "appSecret": "secret",
   "accessToken": "secret",
   "refreshToken": "secret",
-  "webhookSecret": "secret"
+  "webhookSecret": "secret",
+  "apiBaseUrl": "https://open-api.tiktokglobalshop.com",
+  "authBaseUrl": "https://services.tiktokshop.com",
+  "sendMessagePath": "verified-send-message-path"
 }
 ```
 
-Use `externalAccountId` as `shopId` or `sellerId`, depending on the stable id exposed by TikTok Shop APIs.
+Use `externalAccountId` as `shopId` or `sellerId`, depending on the stable id exposed by TikTok Shop APIs. `appSecret`, `accessToken`, `refreshToken`, and `webhookSecret` are secrets and must be masked in client responses. Safe webhook debug metadata can be stored in config, but raw webhook payloads, raw message text, headers, signatures, and buyer PII must not be stored or logged.
 
+Pre-production gaps remain: exact Partner Center Customer Service API scope verification, OAuth/callback implementation, official signature rule confirmation, outbound send adapter verification, durable storage-backed idempotency, token refresh scheduler/monitoring, rate-limit/backoff policy, and a real TikTok Shop Seller end-to-end buyer chat test.
 ## Rules for future channels
 
 1. Prefer `ChannelAccount.config` for any platform that supports multiple pages, accounts, shops, sellers, mailboxes, or phone numbers.

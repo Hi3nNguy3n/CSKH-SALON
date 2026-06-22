@@ -72,6 +72,308 @@ interface ApiSection {
 
 const apiSections: ApiSection[] = [
   {
+    id: "channel-readiness-matrix",
+    name: "Channel Readiness Matrix",
+    icon: Check,
+    notes: [
+      "This matrix is the high-level truth for lead/customer discussion. It separates implemented code from production readiness.",
+      "Authorized is not the same as production-ready. Connected is not proof that a real customer can receive a bot reply.",
+      "Any marketplace or social channel should pass a real end-to-end test before being called production-ready.",
+    ],
+    guideGroups: [
+      {
+        title: "Web widget / API",
+        items: [
+          "Runtime status: available through /api/chat and public widget/API flows.",
+          "Inbound support: available for website/API/direct chat requests.",
+          "Outbound support: internal response returned to caller; no external platform credential needed.",
+          "Auth/config support: API key or app session depending on caller.",
+          "Needs real credential: no platform credential needed beyond app deployment/auth.",
+          "Production readiness: ready if deployment, AI provider, Knowledge Base, rate-limit, and monitoring are stable.",
+        ],
+      },
+      {
+        title: "Facebook Messenger",
+        items: [
+          "Runtime status: available in current Meta webhook/send flow.",
+          "Inbound support: shared Meta webhook /api/webhooks/meta handles Facebook page messages.",
+          "Outbound support: available through Meta send API when page token and permissions are valid.",
+          "Auth/config support: verify token, page access token, page id, app secret, graph version.",
+          "Needs real credential: Meta app, Facebook Page admin access, page token, webhook verification.",
+          "Production readiness: near-ready after real Meta E2E, app review/permissions, signature verification, and no-secret logging checks.",
+        ],
+      },
+      {
+        title: "Instagram Direct Messaging",
+        items: [
+          "Runtime status: available via the shared Meta flow.",
+          "Inbound support: shared Meta webhook /api/webhooks/meta handles Instagram messaging payloads.",
+          "Outbound support: available when Instagram access token, permissions, and account eligibility are valid.",
+          "Auth/config support: verify token, Instagram access token, business/account id, app secret, graph version.",
+          "Needs real credential: Instagram Business/Creator account, Meta app permissions, Instagram messaging access.",
+          "Production readiness: near-ready after real Instagram E2E and Meta review/permission checks.",
+        ],
+      },
+      {
+        title: "Zalo Python relay",
+        items: [
+          "Runtime status: available through Python relay/session-cookie style integration.",
+          "Inbound support: /api/channels/zalo/incoming accepts relay payloads and scopes messages by account when accountId is present.",
+          "Outbound support: available through the relay/send helpers when the session is valid.",
+          "Auth/config support: cookies/session input, optional relaySecret, python command, script path, account/OA id.",
+          "Needs real credential: valid Zalo session/cookies and relay runtime; relaySecret is recommended for production safety.",
+          "Production readiness: fallback/demo/current operational mode, not an official Zalo OA API integration.",
+        ],
+      },
+      {
+        title: "Zalo Official OA",
+        items: [
+          "Runtime status: planned/config-ready only; official OA adapter is not implemented in the current product flow.",
+          "Inbound support: not implemented for official OA API.",
+          "Outbound support: not implemented for official OA API.",
+          "Auth/config support: should be designed separately if the team chooses official OA.",
+          "Needs real credential: official OA credentials and approval from Zalo.",
+          "Production readiness: future phase, not current runtime.",
+        ],
+      },
+      {
+        title: "Shopee",
+        items: [
+          "Runtime status: pre-E2E ready with account config, auth start/callback, token helper, webhook receiver, normalized inbound, and send adapter scaffold.",
+          "Inbound support: /api/webhooks/shopee parses supported buyer text events and hands them to the normalized flow.",
+          "Outbound support: send adapter exists but must be verified with a real Shopee Partner App/shop and approved chat scope.",
+          "Auth/config support: Partner ID, Partner Key, shop authorization callback, access token, refresh token, webhook secret.",
+          "Needs real credential: legitimate Shopee Seller account and Shopee Open Platform Partner App.",
+          "Production readiness: not ready until real Seller/Partner E2E passes auth, webhook, receive, send, token refresh, idempotency, and fallback checks.",
+        ],
+      },
+      {
+        title: "TikTok Shop",
+        items: [
+          "Runtime status: pre-E2E inbound scaffold.",
+          "Inbound support: /api/webhooks/tiktok-shop accepts customer-service style message payloads and maps text into normalized inbound flow.",
+          "Outbound support: not finalized; send-message endpoint/scope must be verified in TikTok Shop Partner Center.",
+          "Auth/config support: account config and secret masking exist; OAuth/callback contract is not finalized.",
+          "Needs real credential: legitimate TikTok Shop Seller account plus Partner Center/Open Platform app.",
+          "Production readiness: no. It requires Partner Center contract verification, real webhook payload, send-message API, token refresh, idempotency, and E2E buyer chat test.",
+        ],
+      },
+      {
+        title: "WhatsApp",
+        items: [
+          "Runtime status: available in current implementation through whatsapp-web.js / WhatsApp Web style runtime.",
+          "Inbound support: available when the local WhatsApp client is connected and message events are received.",
+          "Outbound support: available through the current WhatsApp client send helper.",
+          "Auth/config support: QR/session based current flow; Cloud API multi-account is not the current implementation.",
+          "Needs real credential: phone/session/QR connection and stable runtime host.",
+          "Production readiness: partial; depends on session stability and should be reassessed before customer go-live.",
+        ],
+      },
+      {
+        title: "Email",
+        items: [
+          "Runtime status: available for SMTP/IMAP style configuration in current implementation.",
+          "Inbound support: depends on configured mailbox polling/IMAP flow in environment.",
+          "Outbound support: available through SMTP send helper when settings are valid.",
+          "Auth/config support: SMTP/IMAP host, ports, user, password/from address.",
+          "Needs real credential: customer mailbox credentials or app password.",
+          "Production readiness: available after real mailbox send/receive test and spam/deliverability review.",
+        ],
+      },
+      {
+        title: "Phone / Twilio voice",
+        items: [
+          "Runtime status: available if Twilio settings are configured.",
+          "Inbound support: /api/channels/phone/incoming and gather/status routes support Twilio voice flow.",
+          "Outbound support: voice response/TwiML path exists; full call operations depend on Twilio credentials and phone number.",
+          "Auth/config support: Twilio SID, token, phone number, callback URLs, optional voice provider settings.",
+          "Needs real credential: Twilio account, phone number, webhook URLs, valid signatures.",
+          "Production readiness: available after real call E2E, signature verification, and fallback handling.",
+        ],
+      },
+      {
+        title: "SMS / Twilio",
+        items: [
+          "Runtime status: available if Twilio SMS settings are configured.",
+          "Inbound support: /api/channels/sms maps inbound SMS into normalized inbound flow.",
+          "Outbound support: TwiML response path and Twilio send helper are available when configured.",
+          "Auth/config support: Twilio SID, token, phone number, webhook signature validation.",
+          "Needs real credential: Twilio account, SMS-capable number, public webhook URL.",
+          "Production readiness: available after real SMS send/receive E2E and opt-in/compliance review.",
+        ],
+      },
+      {
+        title: "Telegram",
+        items: [
+          "Runtime status: available for bot webhook style text messages.",
+          "Inbound support: /api/channels/telegram maps text messages into normalized inbound flow.",
+          "Outbound support: Bot API sendMessage is used when bot token is configured.",
+          "Auth/config support: Telegram bot token and webhook registration.",
+          "Needs real credential: Telegram bot token and public webhook URL.",
+          "Production readiness: available after real bot E2E and webhook delivery/retry review.",
+        ],
+      },
+    ],
+    endpoints: [],
+  },
+  {
+    id: "connection-status-definitions",
+    name: "Connection Status Definitions",
+    icon: Key,
+    notes: [
+      "These labels describe integration progress, not business approval. A channel can be authorized but still not ready for real customers.",
+      "Authorized != production-ready. Connected != bot has replied successfully on the external platform.",
+    ],
+    guideGroups: [
+      {
+        title: "Status meanings",
+        items: [
+          "config_saved: configuration was saved, but authorization and real webhook/chat verification have not finished.",
+          "authorization_required: an admin must open the platform authorization/approval screen and grant access.",
+          "authorized: token/account/shop/page id exists, but webhook receive and outbound send are not proven yet.",
+          "webhook_pending: webhook is expected but no valid real webhook has been accepted yet.",
+          "webhook_verified: a valid webhook request reached the app and passed parsing/signature checks.",
+          "chat_receive_verified: a real or accepted test customer message was parsed and entered the normalized inbound flow.",
+          "chat_send_verified: the app successfully delivered a reply back to the external platform.",
+          "production_ready: only use after auth, webhook, receive, send, token refresh, idempotency, rate-limit/backoff, monitoring, and human fallback are verified.",
+          "error: account or channel needs operator review; do not treat it as connected.",
+        ],
+      },
+      {
+        title: "Operator rules",
+        items: [
+          "Do not promise production readiness from config_saved or authorized alone.",
+          "Do not mark Shopee/TikTok Shop production-ready without a real Seller/Partner Center E2E test.",
+          "Do not store raw webhook payloads, raw buyer messages, tokens, signatures, or keys in debug metadata.",
+          "When in doubt, show the current stage and the next missing verification step instead of saying connected.",
+        ],
+      },
+    ],
+    endpoints: [],
+  },
+  {
+    id: "real-e2e-testing-checklist",
+    name: "Real E2E Testing Checklist",
+    icon: Webhook,
+    notes: [
+      "Use this checklist when lead/customer provides real platform credentials. It is intentionally platform-neutral first, then platform-specific.",
+      "The goal is to prove the full path: platform customer message -> webhook/inbound -> conversation -> AI response -> outbound reply -> safe logs/fallback.",
+    ],
+    guideGroups: [
+      {
+        title: "General E2E checklist",
+        items: [
+          "Confirm the platform account exists and belongs to the customer.",
+          "Confirm developer/partner app exists and is approved enough for the tested feature.",
+          "Confirm callback/webhook uses a public HTTPS URL, not localhost.",
+          "Add the ChannelAccount or channel config in LinhKienLed1000.",
+          "Save config and verify secrets are masked in UI/API responses.",
+          "Authorize/connect where the platform supports OAuth or shop/page approval.",
+          "Configure webhook URL in the platform console.",
+          "Send a real user/customer message from the platform.",
+          "Confirm safe webhook debug metadata updates without raw message text or secrets.",
+          "Confirm a conversation is created with correct channel and channelAccountId where applicable.",
+          "Confirm bot response is generated from the correct Knowledge Base context.",
+          "Confirm outbound reply is delivered back to the platform.",
+          "Confirm no secret/token/signature/raw buyer PII appears in UI, logs, or screenshots.",
+          "Confirm retry/idempotency behavior does not duplicate replies.",
+          "Confirm token refresh or credential rotation behavior before go-live.",
+        ],
+      },
+      {
+        title: "Meta E2E",
+        items: [
+          "Verify /api/webhooks/meta with Meta's hub.challenge flow.",
+          "Send a Facebook Page message and confirm channel=facebook conversation plus outbound reply.",
+          "Send an Instagram DM and confirm channel=instagram conversation plus outbound reply.",
+          "Check x-hub-signature-256 verification when appSecret is configured.",
+          "Confirm Meta app mode, app review, page/account permissions, and token lifetime for production users.",
+        ],
+      },
+      {
+        title: "Zalo E2E",
+        items: [
+          "Start the Python relay with valid session/cookies for the intended Zalo account.",
+          "Configure relaySecret and verify the relay sends x-zalo-relay-secret.",
+          "Send a real Zalo message and confirm /api/channels/zalo/incoming receives account-scoped payload.",
+          "Confirm conversation channel=zalo and outbound relay reply works.",
+          "Remember this is the Python relay/session-cookie path, not official OA API.",
+        ],
+      },
+      {
+        title: "Shopee E2E",
+        items: [
+          "Use a legitimate Shopee Seller account and Open Platform Partner App.",
+          "Save Partner ID/Partner Key in Channels -> Accounts -> Shopee.",
+          "Open auth start /api/channels/shopee/auth/start?accountId=<channelAccountId> through the app, not by manually calling callback.",
+          "Approve the app in Shopee and verify callback stores tokens with status=authorized.",
+          "Configure webhook to /api/webhooks/shopee and send a buyer chat message.",
+          "Confirm webhook_verified, chat_receive_verified, and chat_send_verified before any production claim.",
+        ],
+      },
+      {
+        title: "TikTok Shop E2E",
+        items: [
+          "Use a legitimate TikTok Shop Seller account and Partner Center/Open Platform app.",
+          "Confirm Customer Service/Conversation/Message scopes and exact OAuth/webhook/signature/send-message contract in Partner Center.",
+          "Save Shop/Seller ID, App/Client key, App secret, tokens, and webhookSecret when available.",
+          "Configure webhook to /api/webhooks/tiktok-shop if Partner Center allows it.",
+          "Send/capture a real customer-service message payload and confirm safe debug metadata plus normalized conversation creation.",
+          "Only complete outbound reply after send-message endpoint/scope are verified with the real Partner Center app.",
+        ],
+      },
+    ],
+    endpoints: [],
+  },
+  {
+    id: "platform-bypass-limits",
+    name: "What This App Cannot Bypass",
+    icon: BookOpen,
+    notes: [
+      "This section is for expectation-setting with lead/customer. The app can store config and process messages, but it cannot override platform rules.",
+    ],
+    guideGroups: [
+      {
+        title: "Hard platform limits",
+        items: [
+          "The app cannot create a Seller shop, Facebook Page, Instagram account, Zalo account, or Telegram bot on behalf of the customer.",
+          "The app cannot bypass seller verification, tax verification, bank verification, identity checks, or business verification required by Shopee, TikTok Shop, Meta, Zalo, Twilio, or any provider.",
+          "The app cannot bypass Meta app review, TikTok Shop Partner Center approval, Shopee Open Platform approval, or Zalo official API approval.",
+          "The app cannot grant API scopes that the platform has not approved for the customer app/account.",
+          "The app cannot guarantee gated Partner Console endpoints work until a real approved app/account is used.",
+          "The app should not store raw payloads, raw buyer messages, raw tokens, raw signatures, app secrets, partner keys, or refresh tokens in visible debug metadata.",
+          "The app cannot guarantee price, stock, VAT, or warranty accuracy unless the customer uploads verified Knowledge Base data for those topics.",
+        ],
+      },
+    ],
+    endpoints: [],
+  },
+  {
+    id: "lead-handoff-message",
+    name: "Suggested Handoff Message",
+    icon: Users,
+    notes: [
+      "Copy this when reporting status to lead/customer. Adjust platform names depending on what credentials the customer is ready to provide.",
+    ],
+    guideGroups: [
+      {
+        title: "Vietnamese handoff message",
+        items: [
+          "Em đã hoàn thiện phần nền tảng multi-channel/multi-account ở mức pre-E2E. Facebook/Instagram/Zalo relay có runtime hiện tại; Shopee đã có auth/callback/webhook/send scaffold; TikTok Shop đã có config + webhook inbound + normalized flow nhưng cần Partner Center thật để xác minh OAuth/send-message contract. Bước tiếp theo cần account/app thật để test E2E từng nền tảng trước khi gọi production-ready.",
+        ],
+      },
+      {
+        title: "Short technical summary",
+        items: [
+          "Implemented: account config, secret masking, normalized inbound, webhook routes for supported flows, Shopee/TikTok docs and tests.",
+          "Not yet production claim: marketplace OAuth/send contracts that require real Partner/Seller console access.",
+          "Next action: collect real credentials, configure public HTTPS callback/webhook URLs, run platform-specific E2E tests, then mark only verified channels as production_ready.",
+        ],
+      },
+    ],
+    endpoints: [],
+  },
+  {
     id: "chat",
     name: "Chat",
     icon: MessageSquare,
@@ -457,7 +759,7 @@ const apiSections: ApiSection[] = [
     notes: [
       "This guide is for admins or customers who need to connect Facebook Messenger and Instagram Direct Messaging for the first time.",
       "Both Facebook and Instagram use the same callback URL in LinhKienLed1000: <APP_ORIGIN>/api/webhooks/meta.",
-      "Use this guide to understand what each key/token is, where it comes from, and where to paste it in Settings.",
+      "Use this guide to understand what each key/token is, where it comes from, and where to paste it in Channels -> Accounts.",
       "Meta Dashboard screens may change. Use the official Meta docs links as the source of truth for exact button names and review requirements.",
       "Never paste real access tokens or app secrets into chat, screenshots, public docs, logs, or Git commits.",
     ],
@@ -490,16 +792,16 @@ const apiSections: ApiSection[] = [
       {
         title: "3. Where to paste in LinhKienLed1000",
         items: [
-          "Settings -> Facebook -> Verify Token.",
-          "Settings -> Facebook -> Page Access Token.",
-          "Settings -> Facebook -> Page ID, optional.",
-          "Settings -> Facebook -> Graph Version.",
-          "Settings -> Facebook -> App Secret, optional but recommended in production.",
-          "Settings -> Instagram -> Verify Token.",
-          "Settings -> Instagram -> Access Token.",
-          "Settings -> Instagram -> Business Account ID, optional.",
-          "Settings -> Instagram -> Graph Version.",
-          "Settings -> Instagram -> App Secret, optional but recommended in production.",
+          "Channels -> Accounts -> Facebook -> Verify Token.",
+          "Channels -> Accounts -> Facebook -> Page Access Token.",
+          "Channels -> Accounts -> Facebook -> Page ID, optional.",
+          "Channels -> Accounts -> Facebook -> Graph Version.",
+          "Channels -> Accounts -> Facebook -> App Secret, required for production webhook signature checks.",
+          "Channels -> Accounts -> Instagram -> Verify Token.",
+          "Channels -> Accounts -> Instagram -> Access Token.",
+          "Channels -> Accounts -> Instagram -> Business Account ID, optional.",
+          "Channels -> Accounts -> Instagram -> Graph Version.",
+          "Channels -> Accounts -> Instagram -> App Secret, required for production webhook signature checks.",
         ],
       },
       {
@@ -529,7 +831,7 @@ const apiSections: ApiSection[] = [
           "In the Meta Developer App, open the Messenger or Messenger API setup area.",
           "Select the Facebook Page that LinhKienLed1000 should reply from.",
           "Generate or copy the Page Access Token for that Page.",
-          "Paste it into LinhKienLed1000 Settings -> Facebook -> Page Access Token.",
+          "Paste it into LinhKienLed1000 Channels -> Accounts -> Facebook -> Page Access Token.",
           "Optional Page ID lookup: call https://graph.facebook.com/v25.0/me?fields=id,name&access_token=YOUR_FACEBOOK_PAGE_ACCESS_TOKEN and use the returned id.",
           "If the token later returns 401 or 403, regenerate it or check permissions/app mode/review in Meta Dashboard.",
         ],
@@ -537,8 +839,8 @@ const apiSections: ApiSection[] = [
       {
         title: "7. Configure Facebook Messenger webhook",
         items: [
-          "In LinhKienLed1000 Settings -> Facebook, fill Verify Token, Page Access Token, Graph Version, optional Page ID, and optional App Secret.",
-          "Save the Facebook channel config before testing Meta verification.",
+          "In LinhKienLed1000 Channels -> Accounts -> Facebook, add or edit the Page account and fill Verify Token, Page Access Token, Graph Version, optional Page ID, and App Secret.",
+          "Save the Facebook account config before testing Meta verification.",
           "In Meta Dashboard webhook settings, set Callback URL to <APP_ORIGIN>/api/webhooks/meta.",
           "Set Verify Token in Meta Dashboard to exactly the same value saved in LinhKienLed1000.",
           "Subscribe the Facebook Page/webhook to the Messenger message events required by the app.",
@@ -562,15 +864,15 @@ const apiSections: ApiSection[] = [
           "Configure the app/account according to Meta's Instagram Direct Messaging requirements.",
           "Complete the authorization/login step for the Instagram account that should receive messages.",
           "Copy the Instagram Access Token produced by that flow.",
-          "Paste it into LinhKienLed1000 Settings -> Instagram -> Access Token.",
+          "Paste it into LinhKienLed1000 Channels -> Accounts -> Instagram -> Access Token.",
           "Optional Business Account ID is metadata for checking/debugging. Webhook recipient.id can also help confirm which Instagram account received a message.",
         ],
       },
       {
         title: "10. Configure Instagram Direct Messaging webhook",
         items: [
-          "In LinhKienLed1000 Settings -> Instagram, fill Verify Token, Access Token, Graph Version, optional Business Account ID, and optional App Secret.",
-          "Save the Instagram channel config before testing Meta verification.",
+          "In LinhKienLed1000 Channels -> Accounts -> Instagram, add or edit the Business account and fill Verify Token, Access Token, Graph Version, optional Business Account ID, and App Secret.",
+          "Save the Instagram account config before testing Meta verification.",
           "In Meta Dashboard webhook settings, use the same shared callback URL: <APP_ORIGIN>/api/webhooks/meta.",
           "Set Verify Token in Meta Dashboard to exactly the same value saved in LinhKienLed1000.",
           "Subscribe the required Instagram messaging/webhook events in Meta Dashboard.",
@@ -605,7 +907,7 @@ const apiSections: ApiSection[] = [
           "401 or 403 from Meta: token may be expired, missing permission, blocked by app mode/review, or tied to the wrong account/page.",
           "Facebook Page ID is empty: acceptable if the Page Access Token works with /me/messages.",
           "Instagram token does not work: confirm it is from the Instagram API with Instagram Login / Direct Messaging flow, not Basic Display API.",
-          "If any token is exposed, rotate or revoke it in Meta Developer Dashboard and update LinhKienLed1000 Settings.",
+          "If any token is exposed, rotate or revoke it in Meta Developer Dashboard and update the matching LinhKienLed1000 account in Channels -> Accounts.",
         ],
       },
       {
@@ -697,6 +999,8 @@ const apiSections: ApiSection[] = [
       {
         title: "3. URLs to configure",
         items: [
+          "Auth start: GET /api/channels/shopee/auth/start?accountId=<channelAccountId>. Use this route from the app so the accountId is attached correctly.",
+          "Callback: GET /api/channels/shopee/auth/callback. Users should not call callback by hand; Shopee calls it after seller approval.",
           "Redirect URL base: https://<your-app-domain>/api/channels/shopee/auth/callback.",
           "The actual callback must include accountId. Do not call the callback by hand; save the Shopee account in LinhKienLed1000 and use the generated auth start URL so accountId is attached correctly.",
           "Webhook URL: https://<your-app-domain>/api/webhooks/shopee.",
@@ -809,6 +1113,16 @@ const apiSections: ApiSection[] = [
           "Confirm staff handoff/ticket creation works for messages the bot cannot answer safely.",
         ],
       },
+      {
+        title: "12. Shopee limitations",
+        items: [
+          "Endpoint/path names for seller chat must be verified in the real Shopee Partner Console/docs for the customer app and region.",
+          "Webhook payload shape should be captured safely from a real test event before treating parser behavior as final.",
+          "Chat/customer-service scope may require separate Shopee approval even if product/order APIs work.",
+          "Durable storage-backed idempotency/dedupe remains a production requirement before live operation.",
+          "Rate-limit/backoff and production alerting should be tuned after real Shopee response codes are observed.",
+        ],
+      },
     ],
     links: [
       {
@@ -897,6 +1211,163 @@ const apiSections: ApiSection[] = [
     ],
   },
   {
+    id: "tiktok-shop-setup-guide",
+    name: "TikTok Shop Setup Guide",
+    icon: Download,
+    notes: [
+      "Current app status: TikTok Shop account storage, masked config, webhook receiver, tolerant customer-message parser, and normalized inbound handoff are implemented. Real auth URL, scopes, exact webhook payload/signature, and outbound send endpoint must be verified in TikTok Shop Partner Center before production.",
+      "Use TikTok Shop Partner Center/Open Platform for seller customer-service chat. TikTok for Developers and TikTok Business API are not the right surface for Seller Center buyer chat.",
+      "Security: never paste real appSecret, access_token, refresh_token, webhook signatures, request bodies, or buyer personal data into chat, screenshots, public docs, logs, or Git commits.",
+    ],
+    guideGroups: [
+      {
+        title: "1. What exists in LinhKienLed1000 today",
+        items: [
+          "ChannelAccount supports type=tiktok_shop and can store one or more TikTok Shop seller/shop accounts.",
+          "The account form supports Shop/Seller ID, App/Client key, App secret, access token, refresh token, webhook secret, API base URL, auth base URL, and send message path.",
+          "GET responses mask TikTok Shop secrets with flags such as hasAccessToken, hasRefreshToken, hasAppSecret, and hasWebhookSecret.",
+          "POST /api/webhooks/tiktok-shop accepts mocked/Partner-Center-style customer-service message payloads and maps text messages into NormalizedInboundMessage with channel=tiktok_shop.",
+          "Outbound send back to TikTok Shop is intentionally not marked production-ready until exact Partner Center Customer Service API contract is verified with a real app/shop.",
+        ],
+      },
+      {
+        title: "2. Prerequisites",
+        items: [
+          "Create or obtain a legitimate TikTok Shop Seller account for the customer. A normal TikTok user account is not enough.",
+          "Make sure the operator has admin permission for the shop/seller account.",
+          "Create or obtain a TikTok Shop Partner Center/Open Platform app for LinhKienLed1000.",
+          "Request/confirm Customer Service or buyer chat messaging scopes in Partner Center.",
+          "Prepare a public HTTPS app URL. For local testing, use a temporary HTTPS tunnel only for testing.",
+          "Confirm the official authorization URL, callback URL, webhook event name such as NEW_MESSAGE, signature header/rule, token lifetime, and send-message endpoint in Partner Center.",
+        ],
+      },
+      {
+        title: "1A. Current app status details",
+        items: [
+          "account config: implemented through ChannelAccount type=tiktok_shop.",
+          "secret masking: implemented with hasAccessToken, hasRefreshToken, hasAppSecret, and hasWebhookSecret flags.",
+          "webhook inbound route: implemented at POST /api/webhooks/tiktok-shop.",
+          "safe debug metadata: implemented without storing raw payloads or raw message text.",
+          "normalized inbound flow: implemented with channel=tiktok_shop.",
+          "mock/local tests: implemented for parser, signature helper, account config, and webhook route.",
+          "OAuth/callback: requires Partner Center contract verification before implementation can be finalized.",
+          "outbound send-message: requires Partner Center contract verification before production use.",
+          "production-ready: no, not until real Partner Center E2E passes.",
+        ],
+      },
+      {
+        title: "3. URLs to configure",
+        items: [
+          "Webhook URL: https://<your-app-domain>/api/webhooks/tiktok-shop.",
+          "Authorization/callback URL: verify the exact TikTok Shop Partner Center OAuth flow first, then configure the app callback URL that matches the final implementation.",
+          "Localhost does not work for real TikTok webhooks. Use deployed HTTPS or a temporary HTTPS tunnel for testing.",
+        ],
+      },
+      {
+        title: "3A. TikTok Shop config fields",
+        items: [
+          "shopId: stable TikTok Shop id when Partner Center exposes it.",
+          "sellerId: seller/account id if this is the stable id exposed by TikTok Shop APIs.",
+          "appKey / clientKey: public app/client identifier from Partner Center.",
+          "appSecret / clientSecret: secret credential; store only as masked secret.",
+          "accessToken: token for authorized API calls after real OAuth/token exchange.",
+          "refreshToken: token used to rotate access token when TikTok Shop provides it.",
+          "webhookSecret: signing secret or equivalent verification material.",
+          "integrationStatus: current stage such as config_saved, authorization_required, webhook_verified, chat_receive_verified, or production_ready.",
+          "lastWebhookAt, lastWebhookParseStatus, lastChatReceiveAt, lastChatSendAt: safe debug timestamps/status only.",
+          "sendMessagePath: pending/verified send-message path. Leave unset until Partner Center confirms the endpoint.",
+        ],
+      },
+      {
+        title: "4. In-app steps",
+        items: [
+          "1. Open Channels -> Accounts -> Add TikTok Shop.",
+          "2. Enter display name and Shop/Seller ID.",
+          "3. Enter App/Client key and App secret from Partner Center. Do not expose these in logs or screenshots.",
+          "4. Save the config. The status should be config_saved.",
+          "5. Click Ủy quyền shop. Current behavior keeps status at authorization_required until the exact Partner Center auth flow is verified.",
+          "6. Configure webhook URL in Partner Center and send a real/test buyer message payload.",
+          "7. Check safe debug fields on the account: webhook_verified and chat_receive_verified indicate inbound receive works. chat_send_verified should only be used after outbound send API is verified.",
+        ],
+      },
+      {
+        title: "5. Runtime flow target",
+        items: [
+          "Buyer sends message in TikTok Shop customer service chat.",
+          "TikTok Shop webhook calls <APP_ORIGIN>/api/webhooks/tiktok-shop.",
+          "LinhKienLed1000 verifies signature when webhookSecret/appSecret is configured and finds ChannelAccount by shop_id/seller_id.",
+          "Payload maps to NormalizedInboundMessage: channel=tiktok_shop, channelAccountId, externalCustomerId, customerContact=tiktok_shop:<shop_id>:<buyer_id>, externalConversationId, platformMessageId, text.",
+          "processNormalizedInboundMessage() resolves customer, finds or creates conversation, calls chat(), and returns the AI response.",
+          "After Partner Center send endpoint is verified, a send adapter should deliver the response back to TikTok Shop buyer chat.",
+        ],
+      },
+      {
+        title: "6. Go-live gate",
+        items: [
+          "Do not mark TikTok Shop production_ready until a real seller app/shop passes: OAuth/token exchange, webhook signature verification, inbound buyer message, normalized conversation creation, AI response, outbound send, retry/idempotency, and staff handoff.",
+          "Confirm official Customer Service API scope and automated messaging policy in Partner Center.",
+          "Confirm logs never expose appSecret, accessToken, refreshToken, signatures, raw payloads, raw buyer messages, or buyer personal data.",
+          "Add durable idempotency storage before live operation so webhook retries do not create duplicate replies.",
+        ],
+      },
+      {
+        title: "7. TikTok Shop expectation setting",
+        items: [
+          "TikTok Shop should not be expected to behave like Facebook/Instagram until Partner Center access confirms Customer Service API and Send Message contract.",
+          "A saved TikTok Shop account means config exists; it does not mean OAuth, webhook signature, receive, or send has passed.",
+          "If Partner Center does not grant customer-service/message scopes, the app cannot force buyer-chat automation.",
+          "Any seller verification, business verification, tax, or bank requirements must be completed in TikTok Shop/Seller Center by the customer.",
+        ],
+      },
+    ],
+    links: [
+      {
+        label: "TikTok Shop Partner Center",
+        url: "https://partner.tiktokshop.com/",
+      },
+      {
+        label: "TikTok Shop Customer Service API Overview",
+        url: "https://partner.tiktokshop.com/docv2/page/customer-service-api-overview",
+      },
+      {
+        label: "TikTok Shop Authorization Overview",
+        url: "https://partner.tiktokshop.com/docv2/page/authorization-overview-202407",
+      },
+      {
+        label: "TikTok Webhooks Overview",
+        url: "https://developers.tiktok.com/doc/webhooks-overview/",
+      },
+    ],
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/webhooks/tiktok-shop",
+        description:
+          "Receive TikTok Shop customer-service webhook payloads. Supported text message events are mapped into the normalized inbound handler. Outbound send is intentionally gated until Partner Center send-message contract is verified.",
+        headers: [
+          {
+            name: "authorization / x-tts-signature / x-tiktok-shop-signature / x-tiktok-hmac-sha256 / x-tiktok-sign",
+            type: "header",
+            required: false,
+            description:
+              "Webhook HMAC signature header. Required when webhookSecret or appSecret is configured for the TikTok Shop ChannelAccount. Confirm the exact official signature header/rule in Partner Center.",
+          },
+        ],
+        requestBody: {
+          type: "NEW_MESSAGE",
+          shop_id: 1001,
+          data: {
+            buyer_id: 2002,
+            conversation_id: "conv-1",
+            message_id: "msg-1",
+            message: { text: "Có đèn pha LED không?" },
+          },
+        },
+        responseExample: { ok: true, received: 1, processed: 1, sent: 0 },
+      },
+    ],
+  },
+  {
     id: "meta-shared-webhook",
     name: "Meta Shared Webhook",
     icon: Webhook,
@@ -915,7 +1386,7 @@ const apiSections: ApiSection[] = [
         method: "GET",
         path: "/api/webhooks/meta",
         description:
-          "Verify the shared Meta webhook callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode is subscribe and hub.verify_token matches Settings > Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as plain text.",
+          "Verify the shared Meta webhook callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode is subscribe and hub.verify_token matches Channels -> Accounts -> Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as plain text.",
         queryParams: [
           {
             name: "hub.mode",
@@ -929,7 +1400,7 @@ const apiSections: ApiSection[] = [
             name: "hub.verify_token",
             type: "string",
             required: true,
-            description: "Webhook verify token from Settings > Facebook/Instagram or META_VERIFY_TOKEN.",
+            description: "Webhook verify token from Channels -> Accounts -> Facebook/Instagram or META_VERIFY_TOKEN.",
           },
           {
             name: "hub.challenge",
@@ -1609,7 +2080,7 @@ function GuideNote({ note }: { note: string }) {
 // ---------------------------------------------------------------------------
 
 export default function ApiDocsPage() {
-  const [activeSection, setActiveSection] = useState("chat");
+  const [activeSection, setActiveSection] = useState("channel-readiness-matrix");
 
   const currentSection = apiSections.find((s) => s.id === activeSection) || apiSections[0];
 

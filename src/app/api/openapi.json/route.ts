@@ -295,7 +295,7 @@ const spec = {
         tags: ["Meta Shared Webhook"],
         summary: "Verify shared Meta webhook",
         description:
-          "Verifies the shared callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode=subscribe and hub.verify_token matches Settings > Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as text/plain.",
+          "Verifies the shared callback for Facebook Messenger and Instagram Direct Messaging. If hub.mode=subscribe and hub.verify_token matches Channels > Accounts > Facebook/Instagram or META_VERIFY_TOKEN, the route returns hub.challenge as text/plain.",
         security: [],
         parameters: [
           {

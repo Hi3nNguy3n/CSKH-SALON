@@ -50,7 +50,17 @@ interface ChannelAccountData {
 }
 
 type WhatsAppMode = "web" | "api";
-const CHANNEL_PAGE_ORDER = ["facebook", "instagram", "zalo", "whatsapp", "email", "phone"];
+const CHANNEL_PAGE_ORDER = ["facebook", "instagram", "zalo", "shopee", "tiktok_shop", "whatsapp", "email", "phone"];
+const ACCOUNT_MANAGED_CHANNEL_TYPES = ["facebook", "instagram", "shopee", "tiktok_shop"];
+const MARKETPLACE_CHANNEL_TYPES = ["shopee", "tiktok_shop"];
+const MARKETPLACE_CONNECTED_STATUSES = new Set([
+  "connected",
+  "authorized",
+  "webhook_verified",
+  "chat_receive_verified",
+  "chat_send_verified",
+  "production_ready",
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -154,10 +164,17 @@ function FieldInput({
   );
 }
 
+function SecretHint({ shown }: { shown: boolean }) {
+  if (!shown) return null;
+  return <p className="mt-1 text-[11px] text-owly-text-light">Để trống để giữ secret hiện có.</p>;
+}
+
 function getChannelLabel(type: string): string {
   if (type === "facebook") return "Facebook";
   if (type === "instagram") return "Instagram";
   if (type === "zalo") return "Zalo";
+  if (type === "shopee") return "Shopee";
+  if (type === "tiktok_shop") return "TikTok Shop";
   if (type === "whatsapp") return "WhatsApp";
   if (type === "email") return "Email";
   if (type === "phone") return "Điện thoại";
@@ -168,6 +185,8 @@ function getChannelDescription(type: string): string {
   if (type === "facebook") return "Tin nhắn từ Facebook Page";
   if (type === "instagram") return "Tin nhắn Instagram Direct";
   if (type === "zalo") return "Tài khoản Zalo đang vận hành";
+  if (type === "shopee") return "Shopee Seller Chat";
+  if (type === "tiktok_shop") return "TikTok Shop Seller Chat";
   if (type === "whatsapp") return "WhatsApp Web hoặc API";
   if (type === "email") return "SMTP và IMAP";
   if (type === "phone") return "Twilio và cuộc gọi";
@@ -178,10 +197,30 @@ function getChannelAccent(type: string): string {
   if (type === "facebook") return "bg-blue-50 text-blue-600";
   if (type === "instagram") return "bg-pink-50 text-pink-600";
   if (type === "zalo") return "bg-cyan-50 text-cyan-600";
+  if (type === "shopee") return "bg-orange-50 text-orange-600";
+  if (type === "tiktok_shop") return "bg-slate-100 text-slate-700";
   if (type === "whatsapp") return "bg-green-50 text-green-600";
   if (type === "email") return "bg-sky-50 text-sky-600";
   if (type === "phone") return "bg-purple-50 text-purple-600";
   return "bg-owly-primary-50 text-owly-primary";
+}
+
+function isMarketplaceChannel(type: string): boolean {
+  return MARKETPLACE_CHANNEL_TYPES.includes(type);
+}
+
+function isAccountManagedChannel(type: string): boolean {
+  return ACCOUNT_MANAGED_CHANNEL_TYPES.includes(type);
+}
+
+function isMarketplaceAccountReady(status: string): boolean {
+  return MARKETPLACE_CONNECTED_STATUSES.has(status);
+}
+
+function isChannelAccountReady(type: string, status: string): boolean {
+  return isMarketplaceChannel(type)
+    ? isMarketplaceAccountReady(status)
+    : status === "connected";
 }
 
 function ChannelIcon({ type }: { type: string }) {
@@ -271,8 +310,28 @@ function ChannelOverview({
   selectedType: string;
   onSelect: (type: string) => void;
 }) {
-  const connectedCount = channels.filter((channel) => channel.status === "connected").length;
-  const activeCount = channels.filter((channel) => channel.isActive).length;
+  const connectedChannelCount = channels.filter(
+    (channel) => !isAccountManagedChannel(channel.type) && channel.status === "connected"
+  ).length;
+  const activeChannelCount = channels.filter(
+    (channel) => !isAccountManagedChannel(channel.type) && channel.isActive
+  ).length;
+  const connectedAccountManagedCount = ACCOUNT_MANAGED_CHANNEL_TYPES.filter((type) => {
+    const channelAccounts = accounts.filter((account) => account.type === type);
+    if (channelAccounts.length > 0) {
+      return channelAccounts.some((account) => isChannelAccountReady(type, account.status));
+    }
+    return channels.find((channel) => channel.type === type)?.status === "connected";
+  }).length;
+  const activeAccountManagedCount = ACCOUNT_MANAGED_CHANNEL_TYPES.filter((type) => {
+    const channelAccounts = accounts.filter((account) => account.type === type);
+    if (channelAccounts.length > 0) {
+      return channelAccounts.some((account) => account.isActive);
+    }
+    return Boolean(channels.find((channel) => channel.type === type)?.isActive);
+  }).length;
+  const connectedCount = connectedChannelCount + connectedAccountManagedCount;
+  const activeCount = activeChannelCount + activeAccountManagedCount;
 
   return (
     <section className="w-full space-y-4">
@@ -299,10 +358,23 @@ function ChannelOverview({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {CHANNEL_PAGE_ORDER.map((type) => {
           const channel = channels.find((item) => item.type === type);
-          const accountCount = accounts.filter((account) => account.type === type).length;
+          const channelAccounts = accounts.filter((account) => account.type === type);
+          const accountCount = channelAccounts.length;
           const isSelected = selectedType === type;
-          const isConnected = channel?.status === "connected";
-          const isActive = Boolean(channel?.isActive);
+          const isAccountManaged = isAccountManagedChannel(type);
+          const isConnected = isAccountManaged && accountCount > 0
+            ? channelAccounts.some((account) => isChannelAccountReady(type, account.status))
+            : channel?.status === "connected";
+          const isActive = isAccountManaged && accountCount > 0
+            ? channelAccounts.some((account) => account.isActive)
+            : Boolean(channel?.isActive);
+          const statusText = isAccountManaged && accountCount === 0
+            ? "Chưa có account"
+            : isConnected
+              ? "Đã kết nối"
+              : isActive
+                ? "Đã khai báo"
+                : "Chưa bật";
 
           return (
             <button
@@ -339,7 +411,7 @@ function ChannelOverview({
               </div>
               <div className="mt-4 flex items-center justify-between text-xs">
                 <span className={isConnected ? "text-owly-success" : "text-owly-text-light"}>
-                  {isConnected ? "Đã kết nối" : isActive ? "Đã bật" : "Chưa bật"}
+                  {statusText}
                 </span>
                 <span className="text-owly-text-light">
                   {accountCount} account
@@ -1130,540 +1202,68 @@ function ZaloCard({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Meta Channel Card
-// ---------------------------------------------------------------------------
-
-type MetaChannelType = "facebook" | "instagram";
-
-function MetaReadinessBadge({
-  isActive,
-  hasAccessToken,
-}: {
-  isActive: boolean;
-  hasAccessToken: boolean;
-}) {
-  const label = hasAccessToken ? (isActive ? "Đã bật" : "Đã cấu hình") : "Thiếu token";
-  const isReady = hasAccessToken && isActive;
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
-        isReady
-          ? "bg-owly-success/10 text-owly-success"
-          : hasAccessToken
-            ? "bg-amber-50 text-amber-700"
-            : "bg-owly-danger/10 text-owly-danger"
-      )}
-    >
-      <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          isReady ? "bg-owly-success" : hasAccessToken ? "bg-amber-500" : "bg-owly-danger"
-        )}
-      />
-      {label}
-    </span>
-  );
-}
-
-function SecretIndicator({ label, enabled }: { label: string; enabled: boolean }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-owly-border bg-owly-bg px-3 py-2">
-      <span className="text-xs font-medium text-owly-text-light">{label}</span>
-      <span
-        className={cn(
-          "text-xs font-medium",
-          enabled ? "text-owly-success" : "text-owly-danger"
-        )}
-      >
-        {enabled ? "Đã có" : "Chưa có"}
-      </span>
-    </div>
-  );
-}
-
-function MetaChannelCard({
-  channel,
+function AccountManagedChannelPanel({
   type,
-  onSave,
-  saving,
-}: {
-  channel: ChannelData;
-  type: MetaChannelType;
-  onSave: (type: string, config: Record<string, unknown>, isActive: boolean) => void;
-  saving: boolean;
-}) {
-  const cfg = channel.config as Record<string, string | boolean>;
-  const isFacebook = type === "facebook";
-  const [isActive, setIsActive] = useState(channel.isActive);
-  const [verifyToken, setVerifyToken] = useState(String(cfg.verifyToken || ""));
-  const [accountId, setAccountId] = useState(
-    String(isFacebook ? cfg.pageId || "" : cfg.businessAccountId || "")
-  );
-  const [graphVersion, setGraphVersion] = useState(String(cfg.graphVersion || "v25.0"));
-  const hasAccessToken = Boolean(
-    isFacebook ? cfg.hasPageAccessToken : cfg.hasAccessToken
-  );
-  const hasAppSecret = Boolean(cfg.hasAppSecret);
-  const title = isFacebook ? "Facebook Messenger" : "Instagram Direct";
-  const description = isFacebook
-    ? "Nhận và trả lời tin nhắn từ Facebook Page"
-    : "Nhận và trả lời tin nhắn Instagram Direct";
-  const readinessIssues = [
-    !hasText(verifyToken) ? "Thiếu Webhook Verify Token." : "",
-    !hasText(accountId)
-      ? `Thiếu ${isFacebook ? "Page ID" : "Instagram Business Account ID"}.`
-      : "",
-    !hasText(graphVersion) ? "Thiếu Graph API Version." : "",
-    !hasAccessToken
-      ? `Thiếu ${isFacebook ? "Page access token" : "Instagram access token"}; vào Cấu hình secret để nhập.`
-      : "",
-    !hasAppSecret ? "Thiếu App Secret; vào Cấu hình secret để nhập." : "",
-  ].filter(Boolean);
-  const saveDisabled = saving || (isActive && readinessIssues.length > 0);
-
-  return (
-    <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
-      <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className={cn(
-                "p-2.5 rounded-lg",
-                isFacebook ? "bg-blue-50 text-blue-600" : "bg-pink-50 text-pink-600"
-              )}
-            >
-              <MessageCircle className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-owly-text">{title}</h3>
-              <p className="text-xs text-owly-text-light mt-0.5">{description}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <MetaReadinessBadge isActive={isActive} hasAccessToken={hasAccessToken} />
-            <Toggle enabled={isActive} onChange={setIsActive} />
-          </div>
-        </div>
-      </div>
-
-      <div className="p-5 space-y-4">
-        <div className="rounded-lg border border-owly-primary/20 bg-owly-primary-50/40 p-3">
-          <p className="text-xs text-owly-text">
-            Webhook dùng chung: <span className="font-mono">/api/webhooks/meta</span>
-          </p>
-        </div>
-
-        <FieldInput
-          label="Webhook Verify Token"
-          value={verifyToken}
-          onChange={setVerifyToken}
-          placeholder="meta-test-token-123"
-          isSecret
-        />
-        <FieldInput
-          label={isFacebook ? "Page ID" : "Instagram Business Account ID"}
-          value={accountId}
-          onChange={setAccountId}
-          placeholder={isFacebook ? "1234567890" : "17841400000000000"}
-        />
-        <FieldInput
-          label="Graph API Version"
-          value={graphVersion}
-          onChange={setGraphVersion}
-          placeholder="v25.0"
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <SecretIndicator
-            label={isFacebook ? "Page Token" : "Access Token"}
-            enabled={hasAccessToken}
-          />
-          <SecretIndicator label="App Secret" enabled={hasAppSecret} />
-        </div>
-      </div>
-
-      <div className="space-y-3 border-t border-owly-border bg-owly-bg/50 px-5 py-3">
-        <ConfigReadiness issues={readinessIssues} isActive={isActive} />
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={saveDisabled}
-            onClick={() =>
-              onSave(
-                type,
-                {
-                  verifyToken,
-                  graphVersion,
-                  ...(isFacebook
-                    ? { pageId: accountId }
-                    : { businessAccountId: accountId }),
-                },
-                isActive
-              )
-            }
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Lưu
-          </button>
-          <Link
-            href="/settings"
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-owly-primary bg-owly-primary-50 border border-owly-primary/20 rounded-lg hover:bg-owly-primary-100 transition-colors"
-          >
-            <Key className="h-4 w-4" />
-            Cấu hình secret
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-
-// ---------------------------------------------------------------------------
-// Connected Accounts Panel
-// ---------------------------------------------------------------------------
-
-const ACCOUNT_TYPE_OPTIONS = ["facebook", "instagram", "zalo", "shopee"];
-
-type AccountFormState = {
-  type: string;
-  displayName: string;
-  externalAccountId: string;
-  verifyToken: string;
-  accessToken: string;
-  refreshToken: string;
-  appSecret: string;
-  graphVersion: string;
-  oaId: string;
-  cookiesInput: string;
-  relaySecret: string;
-  pythonCommand: string;
-  scriptPath: string;
-  partnerId: string;
-  partnerKey: string;
-  isDefault: boolean;
-  isActive: boolean;
-};
-
-function getAccountIdLabel(type: string) {
-  if (type === "facebook") return "Page ID";
-  if (type === "instagram") return "Business Account ID";
-  if (type === "zalo") return "Account/OA ID";
-  if (type === "shopee") return "Shop ID";
-  return "Account ID";
-}
-
-function getAccountConfigString(config: Record<string, unknown>, key: string): string {
-  const value = config[key];
-  return typeof value === "string" ? value : "";
-}
-
-function createEmptyAccountForm(type = "facebook"): AccountFormState {
-  return {
-    type,
-    displayName: "",
-    externalAccountId: "",
-    verifyToken: "",
-    accessToken: "",
-    refreshToken: "",
-    appSecret: "",
-    graphVersion: "v25.0",
-    oaId: "",
-    cookiesInput: "",
-    relaySecret: "",
-    pythonCommand: "python3",
-    scriptPath: "zalo_bot.py",
-    partnerId: "",
-    partnerKey: "",
-    isDefault: false,
-    isActive: true,
-  };
-}
-
-function loadAccountForm(account: ChannelAccountData): AccountFormState {
-  const config = account.config || {};
-  return {
-    ...createEmptyAccountForm(account.type),
-    displayName: account.displayName || "",
-    externalAccountId: account.externalAccountId || "",
-    verifyToken: getAccountConfigString(config, "verifyToken"),
-    oaId: getAccountConfigString(config, "oaId"),
-    graphVersion: getAccountConfigString(config, "graphVersion") || "v25.0",
-    pythonCommand: getAccountConfigString(config, "pythonCommand") || "python3",
-    scriptPath: getAccountConfigString(config, "scriptPath") || "zalo_bot.py",
-    partnerId: getAccountConfigString(config, "partnerId"),
-    isDefault: account.isDefault,
-    isActive: account.isActive,
-  };
-}
-
-function buildAccountConfig(form: AccountFormState): Record<string, unknown> {
-  const base = {
-    displayName: form.displayName,
-    externalAccountId: form.externalAccountId,
-  };
-
-  if (form.type === "facebook") {
-    return {
-      ...base,
-      pageId: form.externalAccountId,
-      verifyToken: form.verifyToken,
-      pageAccessToken: form.accessToken,
-      appSecret: form.appSecret,
-      graphVersion: form.graphVersion || "v25.0",
-    };
-  }
-
-  if (form.type === "instagram") {
-    return {
-      ...base,
-      businessAccountId: form.externalAccountId,
-      verifyToken: form.verifyToken,
-      accessToken: form.accessToken,
-      appSecret: form.appSecret,
-      graphVersion: form.graphVersion || "v25.0",
-    };
-  }
-
-  if (form.type === "zalo") {
-    return {
-      ...base,
-      accountId: form.externalAccountId,
-      cookiesInput: form.cookiesInput,
-      relaySecret: form.relaySecret,
-      pythonCommand: form.pythonCommand || "python3",
-      scriptPath: form.scriptPath || "zalo_bot.py",
-    };
-  }
-
-  return {
-    ...base,
-    shopId: form.externalAccountId,
-    partnerId: form.partnerId,
-    accessToken: form.accessToken,
-    refreshToken: form.refreshToken,
-    partnerKey: form.partnerKey,
-  };
-}
-
-function SecretHint({ shown }: { shown: boolean }) {
-  if (!shown) return null;
-  return <p className="mt-1 text-[11px] text-owly-text-light">Để trống để giữ secret hiện có.</p>;
-}
-
-function ConnectedAccountsPanel({
   accounts,
-  saving,
-  onSave,
-  onAction,
-  onDelete,
 }: {
+  type: string;
   accounts: ChannelAccountData[];
-  saving: boolean;
-  onSave: (id: string | null, payload: Record<string, unknown>) => Promise<void>;
-  onAction: (id: string, action: string) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
 }) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<AccountFormState>(() => createEmptyAccountForm());
-
-  const updateForm = <K extends keyof AccountFormState>(key: K, value: AccountFormState[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const resetForm = (nextType = form.type) => {
-    setEditingId(null);
-    setForm(createEmptyAccountForm(nextType));
-  };
-
-  const startEdit = (account: ChannelAccountData) => {
-    setEditingId(account.id);
-    setForm(loadAccountForm(account));
-  };
-
-  const handleSave = async () => {
-    const externalAccountId = form.externalAccountId.trim();
-    if (!externalAccountId) return;
-    const displayName = form.displayName.trim() || externalAccountId;
-    await onSave(editingId, {
-      type: form.type,
-      displayName,
-      externalAccountId,
-      isActive: form.isActive,
-      isDefault: form.isDefault || (!editingId && accounts.every((account) => account.type !== form.type)),
-      config: buildAccountConfig({ ...form, displayName, externalAccountId }),
-    });
-    resetForm(form.type);
-  };
-
-  const isEditing = Boolean(editingId);
-  const selectedAccount = editingId ? accounts.find((account) => account.id === editingId) : null;
-  const selectedConfig = selectedAccount?.config || {};
-  const hasAccessToken = Boolean(selectedConfig.hasPageAccessToken || selectedConfig.hasAccessToken);
-  const hasAppSecret = Boolean(selectedConfig.hasAppSecret);
-  const hasCookiesInput = Boolean(selectedConfig.hasCookiesInput);
-  const hasRelaySecret = Boolean(selectedConfig.hasRelaySecret);
+  const channelAccounts = accounts.filter((account) => account.type === type);
+  const activeCount = channelAccounts.filter((account) => account.isActive).length;
+  const readyCount = channelAccounts.filter((account) => isChannelAccountReady(type, account.status)).length;
+  const webhookPath = type === "tiktok_shop" ? "/api/webhooks/tiktok-shop" : isMarketplaceChannel(type) ? "/api/webhooks/shopee" : "/api/webhooks/meta";
+  const platformName = getChannelLabel(type);
 
   return (
-    <div className="max-w-7xl rounded-xl border border-owly-border bg-owly-surface overflow-hidden">
-      <div className="px-5 py-4 border-b border-owly-border flex items-start justify-between gap-4">
-        <div>
-          <h3 className="font-semibold text-owly-text">Tài khoản kết nối</h3>
-          <p className="text-xs text-owly-text-light mt-1">
-            Quản lý nhiều Facebook Page, Instagram, Zalo account; Shopee giữ ở mức khai báo account.
-          </p>
-        </div>
-        <span className="text-xs px-2.5 py-1 rounded-full bg-owly-primary-50 text-owly-primary font-medium">
-          {accounts.length} account
-        </span>
-      </div>
-
-      <div className="p-5 space-y-5">
-        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-4 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-sm font-semibold text-owly-text">
-              {isEditing ? "Cập nhật tài khoản" : "Thêm tài khoản"}
-            </h4>
-            {isEditing && (
-              <button
-                type="button"
-                onClick={() => resetForm()}
-                className="text-xs font-medium text-owly-text-light hover:text-owly-primary"
-              >
-                Hủy sửa
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+    <div className="rounded-xl border border-owly-border bg-owly-surface p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className={cn("rounded-lg p-2", getChannelAccent(type))}>
+              <ChannelIcon type={type} />
+            </span>
             <div>
-              <label className="block text-xs font-medium text-owly-text-light mb-1">Kênh</label>
-              <select
-                value={form.type}
-                disabled={isEditing}
-                onChange={(event) => resetForm(event.target.value)}
-                className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-bg text-owly-text focus:outline-none focus:ring-2 focus:ring-owly-primary/30 disabled:opacity-60"
-              >
-                {ACCOUNT_TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>{option}</option>
-                ))}
-              </select>
+              <h3 className="text-base font-semibold text-owly-text">{platformName}</h3>
+              <p className="text-sm text-owly-text-light">
+                Kênh này dùng mô hình nhiều account. Token, secret và cấu hình gửi nhận được quản lý tại trang Tài khoản kết nối.
+              </p>
             </div>
-            <FieldInput label="Tên hiển thị" value={form.displayName} onChange={(value) => updateForm("displayName", value)} placeholder="LED1000 HCM" />
-            <FieldInput label={getAccountIdLabel(form.type)} value={form.externalAccountId} onChange={(value) => updateForm("externalAccountId", value)} placeholder="ID tài khoản" />
-            {(form.type === "facebook" || form.type === "instagram") && (
-              <FieldInput label="Verify token" value={form.verifyToken} onChange={(value) => updateForm("verifyToken", value)} isSecret />
-            )}
           </div>
-
-          {(form.type === "facebook" || form.type === "instagram") && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <FieldInput label={form.type === "facebook" ? "Page access token" : "Access token"} value={form.accessToken} onChange={(value) => updateForm("accessToken", value)} isSecret />
-                <SecretHint shown={isEditing && hasAccessToken} />
-              </div>
-              <div>
-                <FieldInput label="App secret" value={form.appSecret} onChange={(value) => updateForm("appSecret", value)} isSecret />
-                <SecretHint shown={isEditing && hasAppSecret} />
-              </div>
-              <FieldInput label="Graph version" value={form.graphVersion} onChange={(value) => updateForm("graphVersion", value)} placeholder="v25.0" />
-            </div>
-          )}
-
-          {form.type === "zalo" && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <FieldInput label="Cookies" value={form.cookiesInput} onChange={(value) => updateForm("cookiesInput", value)} isSecret />
-                  <SecretHint shown={isEditing && hasCookiesInput} />
-                </div>
-                <div>
-                  <FieldInput label="Relay secret" value={form.relaySecret} onChange={(value) => updateForm("relaySecret", value)} isSecret />
-                  <SecretHint shown={isEditing && hasRelaySecret} />
-                </div>
-                <FieldInput label="Python command" value={form.pythonCommand} onChange={(value) => updateForm("pythonCommand", value)} placeholder="python3" />
-                <FieldInput label="Script path" value={form.scriptPath} onChange={(value) => updateForm("scriptPath", value)} placeholder="zalo_bot.py" />
-              </div>
-            </div>
-          )}
-
-          {form.type === "shopee" && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <FieldInput label="Partner ID" value={form.partnerId} onChange={(value) => updateForm("partnerId", value)} />
-              <FieldInput label="Access token" value={form.accessToken} onChange={(value) => updateForm("accessToken", value)} isSecret />
-              <FieldInput label="Refresh token" value={form.refreshToken} onChange={(value) => updateForm("refreshToken", value)} isSecret />
-              <FieldInput label="Partner key" value={form.partnerKey} onChange={(value) => updateForm("partnerKey", value)} isSecret />
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-owly-border pt-4">
-            <div className="flex flex-wrap items-center gap-4 text-sm text-owly-text-light">
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={form.isActive} onChange={(event) => updateForm("isActive", event.target.checked)} />
-                Đang hoạt động
-              </label>
-              <label className="inline-flex items-center gap-2">
-                <input type="checkbox" checked={form.isDefault} onChange={(event) => updateForm("isDefault", event.target.checked)} />
-                Đặt làm mặc định cho kênh
-              </label>
-            </div>
-            <button
-              type="button"
-              disabled={saving || !form.externalAccountId.trim()}
-              onClick={handleSave}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {isEditing ? "Lưu thay đổi" : "Thêm tài khoản"}
-            </button>
+          <div className="rounded-lg border border-owly-border bg-owly-bg/50 px-3 py-2 font-mono text-xs text-owly-text break-all">
+            Webhook: {webhookPath}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {accounts.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-owly-border p-4 text-sm text-owly-text-light">
-              Chưa có tài khoản kết nối riêng. Các form kênh bên dưới vẫn là cấu hình mặc định/backward-compatible.
-            </div>
-          ) : (
-            accounts.map((account) => (
-              <div key={account.id} className="rounded-lg border border-owly-border p-4 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium text-owly-text truncate">{account.displayName || account.externalAccountId}</p>
-                    {account.isDefault && <span className="text-[11px] px-1.5 py-0.5 rounded bg-owly-primary-50 text-owly-primary">mặc định</span>}
-                    {!account.isActive && <span className="text-[11px] px-1.5 py-0.5 rounded bg-owly-danger/10 text-owly-danger">tắt</span>}
-                  </div>
-                  <p className="text-xs text-owly-text-light mt-1 capitalize">{account.type} • {account.externalAccountId}</p>
-                  <div className="mt-2"><StatusBadge status={account.status} /></div>
-                </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <button type="button" onClick={() => startEdit(account)} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title="Sửa">
-                    <Key className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => onAction(account.id, "test")} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title="Kiểm tra">
-                    <TestTube className="h-4 w-4" />
-                  </button>
-                  <button type="button" onClick={() => onAction(account.id, account.status === "connected" ? "disconnect" : "connect")} className="p-2 rounded-lg border border-owly-border text-owly-text-light hover:text-owly-primary hover:bg-owly-primary-50" title={account.status === "connected" ? "Ngắt kết nối" : "Kết nối"}>
-                    {account.status === "connected" ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
-                  </button>
-                  <button type="button" onClick={() => onDelete(account.id)} className="p-2 rounded-lg border border-owly-border text-owly-danger hover:bg-owly-danger/10" title="Xóa">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+        <Link
+          href="/channels/accounts"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-owly-primary px-4 py-2 text-sm font-semibold text-white hover:bg-owly-primary-dark"
+        >
+          <Key className="h-4 w-4" />
+          Quản lý tài khoản
+        </Link>
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Tổng account</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{channelAccounts.length}</p>
+        </div>
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Đang bật</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{activeCount}</p>
+        </div>
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Sẵn sàng</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{readyCount}</p>
         </div>
       </div>
+
+      {channelAccounts.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Chưa có account nào cho {platformName}. Hãy thêm account trước, sau đó chạy kiểm tra kết nối và webhook.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1760,61 +1360,6 @@ export default function ChannelsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSaveAccount = async (id: string | null, payload: Record<string, unknown>) => {
-    setSaving(true);
-    try {
-      const res = await fetch(id ? `/api/channel-accounts/${id}` : "/api/channel-accounts", {
-        method: id ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Failed to save account");
-      }
-      const account = await res.json();
-      setAccounts((prev) =>
-        id
-          ? prev.map((item) => (item.id === account.id ? account : item))
-          : [account, ...prev.filter((item) => item.id !== account.id)]
-      );
-      showToast(id ? "Đã cập nhật tài khoản kết nối" : "Đã thêm tài khoản kết nối");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không lưu được tài khoản", "error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleAccountAction = async (id: string, action: string) => {
-    try {
-      const res = await fetch(`/api/channel-accounts/${id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error || "Action failed");
-      }
-      await fetchChannels();
-      showToast("Đã cập nhật trạng thái tài khoản");
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : "Không xử lý được tài khoản", "error");
-    }
-  };
-
-  const handleDeleteAccount = async (id: string) => {
-    try {
-      const res = await fetch(`/api/channel-accounts/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Delete failed");
-      setAccounts((prev) => prev.filter((account) => account.id !== id));
-      showToast("Đã xóa tài khoản kết nối");
-    } catch {
-      showToast("Không xóa được tài khoản", "error");
-    }
-  };
-
   const handleSave = async (
     type: string,
     config: Record<string, unknown>,
@@ -1872,6 +1417,16 @@ export default function ChannelsPage() {
     };
 
   const renderChannelCard = (type: string) => {
+    if (isAccountManagedChannel(type)) {
+      return (
+        <AccountManagedChannelPanel
+          key={type}
+          type={type}
+          accounts={accounts}
+        />
+      );
+    }
+
     if (type === "whatsapp") {
       return (
         <WhatsAppCard
@@ -1920,18 +1475,6 @@ export default function ChannelsPage() {
       );
     }
 
-    if (type === "facebook" || type === "instagram") {
-      return (
-        <MetaChannelCard
-          key={type}
-          channel={getChannel(type)}
-          type={type}
-          onSave={handleSave}
-          saving={saving}
-        />
-      );
-    }
-
     return null;
   };
 
@@ -1959,10 +1502,16 @@ export default function ChannelsPage() {
             <section className="space-y-3">
               <div className="flex flex-col gap-1">
                 <h2 className="text-base font-semibold text-owly-text">
-                  Cấu hình mặc định: {getChannelLabel(selectedChannelType)}
+                  {isAccountManagedChannel(selectedChannelType)
+                    ? `Tài khoản kết nối: ${getChannelLabel(selectedChannelType)}`
+                    : `Cấu hình mặc định: ${getChannelLabel(selectedChannelType)}`}
                 </h2>
                 <p className="text-sm text-owly-text-light">
-                  Dùng cho trạng thái kênh và tương thích các luồng cấu hình cũ.
+                  {isMarketplaceChannel(selectedChannelType)
+                    ? "Marketplace được quản lý theo từng shop/account, không dùng cấu hình mặc định ở trang này."
+                    : isAccountManagedChannel(selectedChannelType)
+                      ? "Facebook và Instagram được quản lý theo từng Page/Business account tại trang Tài khoản kết nối."
+                    : "Dùng cho trạng thái kênh và tương thích các luồng cấu hình cũ."}
                 </p>
               </div>
               <div className="w-full max-w-5xl">

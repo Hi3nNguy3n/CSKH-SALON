@@ -97,7 +97,9 @@ export function proxy(request: NextRequest) {
     pathname.startsWith("/api/channels/sms") ||
     pathname.startsWith("/api/channels/telegram") ||
     pathname.startsWith("/api/channels/zalo/incoming") ||
-    pathname.startsWith("/api/webhooks/meta")
+    pathname.startsWith("/api/webhooks/meta") ||
+    pathname.startsWith("/api/webhooks/shopee") ||
+    pathname.startsWith("/api/webhooks/tiktok-shop")
   ) {
     return addHeaders(NextResponse.next(), requestId);
   }

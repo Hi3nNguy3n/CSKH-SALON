@@ -55,13 +55,14 @@ type AccountFormState = {
   isActive: boolean;
 };
 
-const ACCOUNT_TYPE_OPTIONS = ["facebook", "instagram", "zalo", "shopee"];
+const ACCOUNT_TYPE_OPTIONS = ["facebook", "instagram", "zalo", "shopee", "tiktok_shop"];
 
 function getChannelLabel(type: string): string {
   if (type === "facebook") return "Facebook";
   if (type === "instagram") return "Instagram";
   if (type === "zalo") return "Zalo";
   if (type === "shopee") return "Shopee";
+  if (type === "tiktok_shop") return "TikTok Shop";
   return type;
 }
 
@@ -70,6 +71,7 @@ function getAccountIdLabel(type: string) {
   if (type === "instagram") return "Business Account ID";
   if (type === "zalo") return "Account/OA ID";
   if (type === "shopee") return "Shop ID";
+  if (type === "tiktok_shop") return "Shop/Seller ID";
   return "Account ID";
 }
 
@@ -96,9 +98,9 @@ function createEmptyAccountForm(type = "facebook"): AccountFormState {
     partnerId: "",
     partnerKey: "",
     webhookSecret: "",
-    apiBaseUrl: "https://partner.shopeemobile.com",
-    authBaseUrl: "https://partner.shopeemobile.com",
-    sendMessagePath: "/api/v2/sellerchat/send_message",
+    apiBaseUrl: type === "tiktok_shop" ? "https://open-api.tiktokglobalshop.com" : "https://partner.shopeemobile.com",
+    authBaseUrl: type === "tiktok_shop" ? "https://services.tiktokshop.com" : "https://partner.shopeemobile.com",
+    sendMessagePath: type === "tiktok_shop" ? "" : "/api/v2/sellerchat/send_message",
     isDefault: false,
     isActive: true,
   };
@@ -115,10 +117,10 @@ function loadAccountForm(account: ChannelAccountData): AccountFormState {
     graphVersion: getAccountConfigString(config, "graphVersion") || "v25.0",
     pythonCommand: getAccountConfigString(config, "pythonCommand") || "python3",
     scriptPath: getAccountConfigString(config, "scriptPath") || "zalo_bot.py",
-    partnerId: getAccountConfigString(config, "partnerId"),
-    apiBaseUrl: getAccountConfigString(config, "apiBaseUrl") || "https://partner.shopeemobile.com",
-    authBaseUrl: getAccountConfigString(config, "authBaseUrl") || "https://partner.shopeemobile.com",
-    sendMessagePath: getAccountConfigString(config, "sendMessagePath") || "/api/v2/sellerchat/send_message",
+    partnerId: getAccountConfigString(config, "partnerId") || getAccountConfigString(config, "appKey") || getAccountConfigString(config, "clientKey"),
+    apiBaseUrl: getAccountConfigString(config, "apiBaseUrl") || (account.type === "tiktok_shop" ? "https://open-api.tiktokglobalshop.com" : "https://partner.shopeemobile.com"),
+    authBaseUrl: getAccountConfigString(config, "authBaseUrl") || (account.type === "tiktok_shop" ? "https://services.tiktokshop.com" : "https://partner.shopeemobile.com"),
+    sendMessagePath: getAccountConfigString(config, "sendMessagePath") || (account.type === "tiktok_shop" ? "" : "/api/v2/sellerchat/send_message"),
     isDefault: account.isDefault,
     isActive: account.isActive,
   };
@@ -163,6 +165,23 @@ function buildAccountConfig(form: AccountFormState): Record<string, unknown> {
     };
   }
 
+  if (form.type === "tiktok_shop") {
+    return {
+      ...base,
+      shopId: form.externalAccountId,
+      sellerId: form.externalAccountId,
+      appKey: form.partnerId,
+      clientKey: form.partnerId,
+      accessToken: form.accessToken,
+      refreshToken: form.refreshToken,
+      appSecret: form.partnerKey,
+      webhookSecret: form.webhookSecret,
+      apiBaseUrl: form.apiBaseUrl || "https://open-api.tiktokglobalshop.com",
+      authBaseUrl: form.authBaseUrl || "https://services.tiktokshop.com",
+      sendMessagePath: form.sendMessagePath,
+    };
+  }
+
   return {
     ...base,
     shopId: form.externalAccountId,
@@ -177,7 +196,7 @@ function buildAccountConfig(form: AccountFormState): Record<string, unknown> {
   };
 }
 
-const SHOPEE_AUTHORIZED_STATUSES = new Set([
+const MARKETPLACE_AUTHORIZED_STATUSES = new Set([
   "authorized",
   "webhook_verified",
   "chat_receive_verified",
@@ -190,9 +209,9 @@ function getStatusView(status: string) {
     case "connected":
       return { label: "Đã kết nối", tone: "success" as const, description: "Trạng thái legacy cho kênh cũ." };
     case "config_saved":
-      return { label: "Đã lưu cấu hình", tone: "neutral" as const, description: "Đã lưu shop/config, chưa bắt đầu hoặc chưa hoàn tất ủy quyền Shopee." };
+      return { label: "Đã lưu cấu hình", tone: "neutral" as const, description: "Đã lưu shop/config, chưa bắt đầu hoặc chưa hoàn tất ủy quyền marketplace." };
     case "authorization_required":
-      return { label: "Cần ủy quyền", tone: "warning" as const, description: "Cần mở Shopee để chủ shop approve Partner App." };
+      return { label: "Cần ủy quyền", tone: "warning" as const, description: "Cần mở trang ủy quyền marketplace để chủ shop approve Partner App." };
     case "authorized":
       return { label: "Đã ủy quyền", tone: "info" as const, description: "Đã lưu token/shop id. Chưa đồng nghĩa bot đã production-ready." };
     case "webhook_verified":
@@ -284,7 +303,77 @@ function SecretHint({ shown }: { shown: boolean }) {
   return <p className="mt-1 text-[11px] text-owly-text-light">Để trống để giữ secret hiện có.</p>;
 }
 
-function ShopeeDebugSummary({ config }: { config: Record<string, unknown> }) {
+
+function AccountReadinessPanel({ issues, warnings }: { issues: string[]; warnings: string[] }) {
+  if (issues.length === 0 && warnings.length === 0) {
+    return (
+      <div className="rounded-lg border border-owly-success/20 bg-owly-success/10 p-3 text-xs text-owly-success">
+        Đủ cấu hình cơ bản để lưu và kiểm tra bước hiện tại.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+      {issues.length ? (
+        <div>
+          <p className="font-semibold">Cần bổ sung trước khi kiểm tra:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {issues.map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {warnings.length ? (
+        <div>
+          <p className="font-semibold">Lưu ý trước go-live:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-4">
+            {warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function getMarketplaceReadiness(form: AccountFormState, config: Record<string, unknown>, isEditing: boolean) {
+  const hasStoredAccessToken = isEditing && Boolean(config.hasAccessToken);
+  const hasStoredRefreshToken = isEditing && Boolean(config.hasRefreshToken);
+  const hasStoredShopeePartnerKey = isEditing && Boolean(config.hasPartnerKey);
+  const hasStoredTikTokAppSecret = isEditing && Boolean(config.hasAppSecret);
+  const hasStoredWebhookSecret = isEditing && Boolean(config.hasWebhookSecret);
+  const hasSecretValue = (value: string, stored: boolean) => value.trim().length > 0 || stored;
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  if (!form.externalAccountId.trim()) {
+    issues.push(form.type === "tiktok_shop" ? "Thiếu Shop/Seller ID." : "Thiếu Shop ID.");
+  }
+  if (!form.partnerId.trim()) {
+    issues.push(form.type === "tiktok_shop" ? "Thiếu App/Client key." : "Thiếu Partner ID.");
+  }
+  if (!hasSecretValue(form.partnerKey, form.type === "tiktok_shop" ? hasStoredTikTokAppSecret : hasStoredShopeePartnerKey)) {
+    issues.push(form.type === "tiktok_shop" ? "Thiếu App secret." : "Thiếu Partner key.");
+  }
+
+  if (!hasSecretValue(form.accessToken, hasStoredAccessToken)) {
+    warnings.push("Chưa có access token; chỉ lưu cấu hình, chưa thể xem là đã ủy quyền đầy đủ.");
+  }
+  if (!hasSecretValue(form.refreshToken, hasStoredRefreshToken)) {
+    warnings.push("Chưa có refresh token; chưa thể kiểm tra vòng đời token.");
+  }
+  if (!hasSecretValue(form.webhookSecret, hasStoredWebhookSecret)) {
+    warnings.push("Webhook secret chưa có; nên bật trước production để xác minh request đến từ nền tảng.");
+  }
+  if (form.type === "tiktok_shop" && !form.sendMessagePath.trim()) {
+    warnings.push("Send message path chưa cấu hình; outbound reply TikTok Shop đang bị giữ ở trạng thái cần xác minh Partner Center.");
+  }
+
+  return { issues, warnings };
+}function MarketplaceDebugSummary({ type, config }: { type: string; config: Record<string, unknown> }) {
   const parseStatus = getAccountConfigString(config, "lastWebhookParseStatus");
   const lastWebhookAt = getAccountConfigString(config, "lastWebhookAt");
   if (!parseStatus && !lastWebhookAt) return null;
@@ -295,7 +384,7 @@ function ShopeeDebugSummary({ config }: { config: Record<string, unknown> }) {
 
   return (
     <div className="mt-3 rounded-lg border border-owly-border bg-owly-bg p-3 text-[11px] text-owly-text-light">
-      <p className="font-medium text-owly-text">Shopee webhook debug an toàn</p>
+      <p className="font-medium text-owly-text">{getChannelLabel(type)} webhook debug an toàn</p>
       <div className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
         <span>Parse: {parseStatus || "--"}</span>
         <span>Event: {getAccountConfigString(config, "lastWebhookEventType") || "--"}</span>
@@ -306,7 +395,7 @@ function ShopeeDebugSummary({ config }: { config: Record<string, unknown> }) {
         <span>Conversation ID: {getAccountConfigString(config, "lastWebhookConversationId") || "--"}</span>
         <span>Buyer ID: {config.lastWebhookBuyerIdPresent === true ? "có" : "chưa thấy"}</span>
         <span>Text: {config.lastWebhookTextPresent === true ? "có" : "chưa thấy"}</span>
-        <span>Idempotency: {getAccountConfigString(config, "lastShopeeIdempotencyKey") || "--"}</span>
+        <span>Idempotency: {getAccountConfigString(config, type === "tiktok_shop" ? "lastTikTokShopIdempotencyKey" : "lastShopeeIdempotencyKey") || "--"}</span>
       </div>
       {payloadKeys.length ? <p className="mt-2 break-words">Payload keys: {payloadKeys.join(", ")}</p> : null}
       {getAccountConfigString(config, "lastWebhookError") ? (
@@ -449,13 +538,14 @@ export default function ChannelAccountsPage() {
   const hasAppSecret = Boolean(selectedConfig.hasAppSecret);
   const hasCookiesInput = Boolean(selectedConfig.hasCookiesInput);
   const hasRelaySecret = Boolean(selectedConfig.hasRelaySecret);
-  const hasShopeeAccessToken = Boolean(selectedConfig.hasAccessToken);
-  const hasShopeeRefreshToken = Boolean(selectedConfig.hasRefreshToken);
-  const hasShopeePartnerKey = Boolean(selectedConfig.hasPartnerKey);
+  const hasMarketplaceAccessToken = Boolean(selectedConfig.hasAccessToken);
+  const hasMarketplaceRefreshToken = Boolean(selectedConfig.hasRefreshToken);
+  const hasMarketplacePartnerKey = Boolean(selectedConfig.hasPartnerKey || selectedConfig.hasAppSecret);
+  const marketplaceReadiness = getMarketplaceReadiness(form, selectedConfig, isEditing);
 
   return (
     <>
-      <Header title="Tài khoản kết nối" description="Quản lý nhiều Facebook Page, Instagram, Zalo account và Shopee shop" />
+      <Header title="Tài khoản kết nối" description="Quản lý nhiều Facebook Page, Instagram, Zalo account, Shopee shop và TikTok Shop" />
 
       <div className="flex-1 overflow-auto p-6">
         {loading ? (
@@ -555,21 +645,21 @@ export default function ChannelAccountsPage() {
                     </div>
                   ) : null}
 
-                  {form.type === "shopee" ? (
+                  {(form.type === "shopee" || form.type === "tiktok_shop") ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                      <FieldInput label="Partner ID" value={form.partnerId} onChange={(value) => updateForm("partnerId", value)} />
+                      <FieldInput label={form.type === "tiktok_shop" ? "App/Client key" : "Partner ID"} value={form.partnerId} onChange={(value) => updateForm("partnerId", value)} />
                         <div>
                           <FieldInput label="Access token" value={form.accessToken} onChange={(value) => updateForm("accessToken", value)} isSecret />
-                          <SecretHint shown={isEditing && hasShopeeAccessToken} />
+                          <SecretHint shown={isEditing && hasMarketplaceAccessToken} />
                         </div>
                         <div>
                           <FieldInput label="Refresh token" value={form.refreshToken} onChange={(value) => updateForm("refreshToken", value)} isSecret />
-                          <SecretHint shown={isEditing && hasShopeeRefreshToken} />
+                          <SecretHint shown={isEditing && hasMarketplaceRefreshToken} />
                         </div>
                         <div>
-                          <FieldInput label="Partner key" value={form.partnerKey} onChange={(value) => updateForm("partnerKey", value)} isSecret />
-                          <SecretHint shown={isEditing && hasShopeePartnerKey} />
+                          <FieldInput label={form.type === "tiktok_shop" ? "App secret" : "Partner key"} value={form.partnerKey} onChange={(value) => updateForm("partnerKey", value)} isSecret />
+                          <SecretHint shown={isEditing && hasMarketplacePartnerKey} />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -579,8 +669,9 @@ export default function ChannelAccountsPage() {
                         <FieldInput label="Send message path" value={form.sendMessagePath} onChange={(value) => updateForm("sendMessagePath", value)} />
                       </div>
                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-                        Dùng shop Shopee Seller hợp lệ đã do khách sở hữu/quản trị. Nếu Shopee yêu cầu xác minh người bán, thuế hoặc thông tin doanh nghiệp thì phải hoàn tất bên ngoài hệ thống này; app không tạo shop và không bỏ qua bước xác minh. Sau khi lưu Partner ID và Partner key, bấm Ủy quyền shop để chủ shop cấp quyền. Trạng thái Đã ủy quyền chưa có nghĩa là webhook/gửi chat đã sẵn sàng production.
+                        {form.type === "tiktok_shop" ? "Dùng TikTok Shop Seller hợp lệ đã do khách sở hữu/quản trị. App hiện lưu cấu hình và nhận webhook test qua normalized flow; URL ủy quyền, scope Customer Service API và send adapter cần xác minh trong TikTok Shop Partner Center trước khi production." : "Dùng shop Shopee Seller hợp lệ đã do khách sở hữu/quản trị. Nếu Shopee yêu cầu xác minh người bán, thuế hoặc thông tin doanh nghiệp thì phải hoàn tất bên ngoài hệ thống này; app không tạo shop và không bỏ qua bước xác minh. Sau khi lưu Partner ID và Partner key, bấm Ủy quyền shop để chủ shop cấp quyền. Trạng thái Đã ủy quyền chưa có nghĩa là webhook/gửi chat đã sẵn sàng production."}
                       </div>
+                      <AccountReadinessPanel issues={marketplaceReadiness.issues} warnings={marketplaceReadiness.warnings} />
                     </div>
                   ) : null}
 
@@ -630,7 +721,7 @@ export default function ChannelAccountsPage() {
                         <div className="mt-3">
                           <StatusBadge status={account.status} />
                         </div>
-                        {account.type === "shopee" ? <ShopeeDebugSummary config={account.config || {}} /> : null}
+                        {(account.type === "shopee" || account.type === "tiktok_shop") ? <MarketplaceDebugSummary type={account.type} config={account.config || {}} /> : null}
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <button type="button" onClick={() => startEdit(account)} className="rounded-lg border border-owly-border p-2 text-owly-text-light hover:bg-owly-primary-50 hover:text-owly-primary" title="Sửa">
@@ -642,19 +733,19 @@ export default function ChannelAccountsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            const isAuthorizedShopee = account.type === "shopee" && SHOPEE_AUTHORIZED_STATUSES.has(account.status);
-                            handleAction(account.id, account.status === "connected" || isAuthorizedShopee ? "disconnect" : "connect");
+                            const isAuthorizedMarketplace = (account.type === "shopee" || account.type === "tiktok_shop") && MARKETPLACE_AUTHORIZED_STATUSES.has(account.status);
+                            handleAction(account.id, account.status === "connected" || isAuthorizedMarketplace ? "disconnect" : "connect");
                           }}
                           className="rounded-lg border border-owly-border p-2 text-owly-text-light hover:bg-owly-primary-50 hover:text-owly-primary"
                           title={
-                            account.status === "connected" || (account.type === "shopee" && SHOPEE_AUTHORIZED_STATUSES.has(account.status))
+                            account.status === "connected" || ((account.type === "shopee" || account.type === "tiktok_shop") && MARKETPLACE_AUTHORIZED_STATUSES.has(account.status))
                               ? "Ngắt kết nối"
-                              : account.type === "shopee"
+                              : (account.type === "shopee" || account.type === "tiktok_shop")
                                 ? "Ủy quyền shop"
                                 : "Kết nối"
                           }
                         >
-                          {account.status === "connected" || (account.type === "shopee" && SHOPEE_AUTHORIZED_STATUSES.has(account.status)) ? (
+                          {account.status === "connected" || ((account.type === "shopee" || account.type === "tiktok_shop") && MARKETPLACE_AUTHORIZED_STATUSES.has(account.status)) ? (
                             <WifiOff className="h-4 w-4" />
                           ) : (
                             <Wifi className="h-4 w-4" />

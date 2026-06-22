@@ -67,7 +67,7 @@ async function getAppSecrets(): Promise<string[]> {
 
 async function hasValidSignature(rawBody: string, signatureHeader: string | null) {
   const appSecrets = await getAppSecrets();
-  if (appSecrets.length === 0) return true;
+  if (appSecrets.length === 0) return process.env.NODE_ENV !== "production";
 
   return appSecrets.some((appSecret) =>
     verifyMetaSignature(rawBody, signatureHeader, appSecret)

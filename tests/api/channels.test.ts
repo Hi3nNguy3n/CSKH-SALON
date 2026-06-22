@@ -580,4 +580,98 @@ describe("channels API secret handling", () => {
     );
     vi.unstubAllGlobals();
   });
+  it("stores TikTok Shop account config with masked secrets", async () => {
+    mockPrisma.channelAccount.findUnique.mockResolvedValue(null);
+    mockPrisma.channelAccount.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.channelAccount.upsert.mockImplementation(async (args) => ({
+      id: "tiktok-account-1",
+      createdAt: new Date("2026-05-31T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-31T00:00:00.000Z"),
+      lastConnectedAt: null,
+      lastError: "",
+      ...args.create,
+    }));
+
+    const { POST } = await import("@/app/api/channel-accounts/route");
+    const response = await POST(
+      createRequest("/api/channel-accounts", {
+        method: "POST",
+        body: {
+          type: "tiktok_shop",
+          displayName: "LED1000 TikTok Shop",
+          externalAccountId: "1001",
+          config: {
+            shopId: "1001",
+            appKey: "app-key",
+            appSecret: "app-secret",
+            accessToken: "access-secret",
+            refreshToken: "refresh-secret",
+            webhookSecret: "webhook-secret",
+          },
+        },
+      })
+    );
+    const data = await parseJsonResponse(response);
+
+    expect(response.status).toBe(201);
+    expect(mockPrisma.channelAccount.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ status: "config_saved" }),
+      })
+    );
+    expect(data.status).toBe("config_saved");
+    expect(data.config).toMatchObject({
+      shopId: "1001",
+      appKey: "app-key",
+      hasAppSecret: true,
+      hasAccessToken: true,
+      hasRefreshToken: true,
+      hasWebhookSecret: true,
+    });
+    expect(JSON.stringify(data)).not.toContain("app-secret");
+    expect(JSON.stringify(data)).not.toContain("access-secret");
+    expect(JSON.stringify(data)).not.toContain("refresh-secret");
+    expect(JSON.stringify(data)).not.toContain("webhook-secret");
+  });
+
+  it("keeps TikTok Shop connect action at authorization_required until Partner Center verification", async () => {
+    const account = {
+      id: "tiktok-account-1",
+      type: "tiktok_shop",
+      displayName: "LED1000 TikTok Shop",
+      externalAccountId: "1001",
+      isActive: true,
+      isDefault: true,
+      config: {
+        shopId: "1001",
+        appKey: "app-key",
+        appSecret: "app-secret",
+      },
+      status: "config_saved",
+      createdAt: new Date("2026-05-31T00:00:00.000Z"),
+      updatedAt: new Date("2026-05-31T00:00:00.000Z"),
+    };
+    mockPrisma.channelAccount.findUnique.mockResolvedValue(account);
+    mockPrisma.channelAccount.update.mockImplementation(async (args) => ({
+      ...account,
+      ...args.data,
+    }));
+
+    const { POST } = await import("@/app/api/channel-accounts/[id]/route");
+    const response = await POST(
+      createRequest("/api/channel-accounts/tiktok-account-1", {
+        method: "POST",
+        body: { action: "connect" },
+      }),
+      { params: Promise.resolve({ id: "tiktok-account-1" }) }
+    );
+    const data = await parseJsonResponse(response);
+
+    expect(response.status).toBe(200);
+    expect(data.status).toBe("authorization_required");
+    expect(data.message).toContain("TikTok Shop Partner Center");
+    expect(data.message).toContain("chưa phải sẵn sàng production");
+    expect(data.authUrl).toBeUndefined();
+    expect(JSON.stringify(data)).not.toContain("app-secret");
+  });
 });

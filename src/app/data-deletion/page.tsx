@@ -24,8 +24,8 @@ export default function DataDeletionPage() {
           <h2 className="text-xl font-semibold">Cách gửi yêu cầu</h2>
           <p className="leading-7">
             Vui lòng gửi email tới{" "}
-            <a className="text-owly-primary underline" href="mailto:nhuutri1311@gmail.com">
-              nhuutri1311@gmail.com
+            <a className="text-owly-primary underline" href="mailto:linhkienled1000@gmail.com">
+              linhkienled1000@gmail.com
             </a>{" "}
             với tiêu đề đề xuất:
           </p>

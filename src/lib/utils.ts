@@ -36,8 +36,12 @@ export function getChannelLabel(channel: string): string {
     facebook: "Facebook",
     instagram: "Instagram",
     zalo: "Zalo",
+    shopee: "Shopee",
+    tiktok_shop: "TikTok Shop",
     email: "Email",
     phone: "Điện thoại",
+    sms: "SMS",
+    telegram: "Telegram",
     api: "API",
     widget: "Website",
   };

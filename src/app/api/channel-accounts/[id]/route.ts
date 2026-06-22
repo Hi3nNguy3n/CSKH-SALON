@@ -14,6 +14,7 @@ import {
   buildShopeeAuthStartUrlForAccount,
   getShopeeAccountReadiness,
 } from "@/lib/channels/shopee";
+import { getTikTokShopAccountReadiness } from "@/lib/channels/tiktok-shop";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -171,6 +172,50 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
     }
 
+
+    if (account.type === "tiktok_shop") {
+      if (action === "disconnect") {
+        const updated = await prisma.channelAccount.update({
+          where: { id },
+          data: { status: "disconnected" },
+        });
+        return NextResponse.json({
+          ...sanitizeChannelAccountForClient(updated),
+          message: `${updated.displayName || updated.type} disconnected`,
+        });
+      }
+
+      if (action === "connect") {
+        const updated = await prisma.channelAccount.update({
+          where: { id },
+          data: { status: "authorization_required" },
+        });
+        return NextResponse.json({
+          ...sanitizeChannelAccountForClient(updated),
+          status: "authorization_required",
+          message: "Cần xác minh app, scope và URL ủy quyền trong TikTok Shop Partner Center trước khi redirect tự động. Trạng thái này chưa phải sẵn sàng production.",
+        });
+      }
+
+      const readiness = getTikTokShopAccountReadiness(account.config);
+      if (!readiness.ok) {
+        return NextResponse.json(
+          {
+            error: `TikTok Shop account is missing: ${readiness.missing.join(", ")}`,
+            missing: readiness.missing,
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        id,
+        type: account.type,
+        status: account.status,
+        ready: true,
+        message: "TikTok Shop account has stored credentials. Webhook receive can be tested with mocked payloads; real auth/send requires Partner Center verification.",
+      });
+    }
     const nextStatus = action === "connect" || action === "test" ? "connected" : "disconnected";
     const updated = await prisma.channelAccount.update({
       where: { id },

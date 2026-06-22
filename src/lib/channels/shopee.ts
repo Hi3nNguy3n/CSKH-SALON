@@ -392,7 +392,7 @@ export function verifyShopeeWebhookSignature(input: {
   secret?: string;
 }): boolean {
   const secret = input.secret?.trim();
-  if (!secret) return true;
+  if (!secret) return process.env.NODE_ENV !== "production";
   const header = input.signatureHeader?.trim();
   if (!header) return false;
 

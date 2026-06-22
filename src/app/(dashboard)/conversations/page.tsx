@@ -77,8 +77,12 @@ const channelIcons: Record<string, React.ElementType> = {
   facebook: MessageCircle,
   instagram: MessageCircle,
   zalo: MessageCircle,
+  shopee: MessageCircle,
+  tiktok_shop: MessageCircle,
   email: Mail,
   phone: Phone,
+  sms: MessageSquare,
+  telegram: MessageCircle,
   api: MessageSquare,
 };
 
@@ -87,8 +91,12 @@ const channelColors: Record<string, string> = {
   facebook: "text-blue-700 bg-blue-50",
   instagram: "text-pink-700 bg-pink-50",
   zalo: "text-sky-700 bg-sky-50",
+  shopee: "text-orange-700 bg-orange-50",
+  tiktok_shop: "text-slate-800 bg-slate-100",
   email: "text-blue-600 bg-blue-50",
   phone: "text-purple-600 bg-purple-50",
+  sms: "text-indigo-700 bg-indigo-50",
+  telegram: "text-cyan-700 bg-cyan-50",
   api: "text-slate-700 bg-slate-100",
 };
 
@@ -97,9 +105,13 @@ const channels = [
   { value: "facebook", label: "Facebook" },
   { value: "instagram", label: "Instagram" },
   { value: "zalo", label: "Zalo" },
+  { value: "shopee", label: "Shopee" },
+  { value: "tiktok_shop", label: "TikTok Shop" },
   { value: "whatsapp", label: "WhatsApp" },
   { value: "email", label: "Email" },
   { value: "phone", label: "Điện thoại" },
+  { value: "sms", label: "SMS" },
+  { value: "telegram", label: "Telegram" },
   { value: "api", label: "API" },
 ];
 
@@ -135,7 +147,10 @@ function parseScopedContact(channel: string, contact?: string | null) {
   const value = contact?.trim() || "";
   const parts = value.split(":").filter(Boolean);
 
-  if (["facebook", "instagram", "zalo"].includes(channel) && parts.length >= 3) {
+  if (
+    ["facebook", "instagram", "zalo", "shopee", "tiktok_shop"].includes(channel) &&
+    parts.length >= 3
+  ) {
     return {
       accountExternalId: parts[1],
       customerExternalId: parts.slice(2).join(":"),
@@ -143,7 +158,12 @@ function parseScopedContact(channel: string, contact?: string | null) {
     };
   }
 
-  if (["facebook", "instagram", "zalo"].includes(channel) && parts.length === 2) {
+  if (
+    ["facebook", "instagram", "zalo", "shopee", "tiktok_shop", "telegram"].includes(
+      channel
+    ) &&
+    parts.length === 2
+  ) {
     return {
       accountExternalId: "",
       customerExternalId: parts[1],
@@ -179,7 +199,7 @@ function getConversationIdentity(conversation: ConversationData) {
     accountName,
     accountExternalId,
     customerCode,
-    customerCodeLabel: ["facebook", "instagram", "zalo"].includes(conversation.channel)
+    customerCodeLabel: ["facebook", "instagram", "zalo", "shopee", "tiktok_shop", "telegram"].includes(conversation.channel)
       ? "Mã khách"
       : "Liên hệ",
   };

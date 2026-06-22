@@ -94,6 +94,11 @@ Migrated in Phase 6B.2:
 
 When `/api/chat` receives an existing `conversationId`, it still calls `chat(conversationId, message)` directly. This preserves the public widget and API test harness contract. The widget script is unchanged and still receives `{ conversationId, response }`.
 
+Scaffolded after Phase 6B:
+
+- Shopee Open Platform seller chat scaffold: account config, masked secrets, authorization callback, webhook receiver, normalized inbound mapping, and outbound send adapter are implemented. Production still requires a real Shopee Seller/Partner App E2E test, approved scopes, token refresh validation, webhook signature configuration, and rate-limit/backoff verification.
+- TikTok Shop scaffold: account config, masked secrets, webhook receiver, and normalized inbound mapping are implemented. Outbound send is intentionally blocked until the Customer Service send-message contract is verified in TikTok Shop Partner Center.
+
 ## Channels Not Yet Migrated
 
 Not migrated in runtime yet:
@@ -101,16 +106,14 @@ Not migrated in runtime yet:
 - WhatsApp
 - Email
 - Phone/Twilio
-- Shopee
-- TikTok Shop
 
 The normalized type supports these values, but their runtime handlers should migrate one by one with focused tests. This avoids rewriting working integrations all at once.
 
-Shopee and TikTok Shop remain type-ready only. No runtime webhook, token handling, or outbound reply adapter has been added for either platform.
+Shopee and TikTok Shop are no longer type-only, but they are still not production-ready without real marketplace E2E verification. Their webhook routes must remain public at the proxy layer and must use configured webhook/app secrets before go-live.
 
-## How Shopee/TikTok Should Use This Later
+## How Shopee/TikTok Use This Pattern
 
-Future Shopee or TikTok Shop webhook/relay code should adapt platform payloads into `NormalizedInboundMessage` before calling `processNormalizedInboundMessage()`.
+Shopee and TikTok Shop webhook/relay code should adapt platform payloads into `NormalizedInboundMessage` before calling `processNormalizedInboundMessage()`.
 
 Suggested mapping:
 
@@ -126,10 +129,10 @@ Suggested mapping:
 - `metadata`: small safe fields needed for routing or diagnostics.
 - `rawPayload`: keep available only inside the adapter layer; avoid persisting or logging it unless sanitized.
 
-Recommended migration order:
+Recommended hardening order:
 
-1. Add channel-specific adapter tests with mocked payloads.
-2. Map payloads into `NormalizedInboundMessage`.
-3. Call `processNormalizedInboundMessage()`.
-4. Add send-reply adapter separately, because each platform has different outbound API and token rules.
-5. Only then expose account management controls in UI.
+1. Verify official webhook signature rules and require a configured secret before production.
+2. Run real seller-account E2E: buyer sends message, app creates conversation, staff/AI reply is delivered to buyer.
+3. Add durable idempotency storage for platform message IDs.
+4. Validate token refresh windows and add scheduler/monitoring.
+5. Tune rate-limit/backoff from real provider error responses.

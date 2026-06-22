@@ -65,8 +65,8 @@ export default function PrivacyPage() {
           <h2 className="text-xl font-semibold">Yêu cầu xóa dữ liệu</h2>
           <p className="leading-7">
             Người dùng có thể yêu cầu xóa dữ liệu bằng cách gửi email tới{" "}
-            <a className="text-owly-primary underline" href="mailto:nhuutri1311@gmail.com">
-              nhuutri1311@gmail.com
+            <a className="text-owly-primary underline" href="mailto:linhkienled1000@gmail.com">
+              linhkienled1000@gmail.com
             </a>
             .
           </p>

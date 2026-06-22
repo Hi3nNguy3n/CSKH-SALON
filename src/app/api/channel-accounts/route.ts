@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     if (!externalAccountId) {
       return NextResponse.json(
-        { error: "externalAccountId, Page ID, OA ID, Shop ID, or business account ID is required" },
+        { error: "externalAccountId, Page ID, OA ID, Shop/Seller ID, or business account ID is required" },
         { status: 400 }
       );
     }
@@ -89,11 +89,11 @@ export async function POST(request: NextRequest) {
     }
 
     const explicitStatus = typeof body.status === "string" ? body.status : undefined;
-    const shopeeSavedStatus = type === "shopee" ? "config_saved" : undefined;
+    const marketplaceSavedStatus = type === "shopee" || type === "tiktok_shop" ? "config_saved" : undefined;
     const nextUpdateStatus =
       explicitStatus ||
-      (type === "shopee" && (!existing || existing.status === "disconnected") ? shopeeSavedStatus : undefined);
-    const nextCreateStatus = explicitStatus || shopeeSavedStatus || "disconnected";
+      ((type === "shopee" || type === "tiktok_shop") && (!existing || existing.status === "disconnected") ? marketplaceSavedStatus : undefined);
+    const nextCreateStatus = explicitStatus || marketplaceSavedStatus || "disconnected";
 
     const account = await prisma.channelAccount.upsert({
       where: { type_externalAccountId: { type, externalAccountId } },
