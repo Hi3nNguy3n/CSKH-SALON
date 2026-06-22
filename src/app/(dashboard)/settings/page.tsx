@@ -104,8 +104,6 @@ const tabs: TabDef[] = [
   { key: "email", label: "Email (SMTP/IMAP)", icon: Mail },
   { key: "whatsapp", label: "WhatsApp", icon: MessageCircle },
   { key: "zalo", label: "Zalo", icon: MessageCircle },
-  { key: "facebook", label: "Facebook", icon: MessageCircle },
-  { key: "instagram", label: "Instagram", icon: MessageCircle },
 ];
 
 // Which fields belong to each section (used for partial saves)

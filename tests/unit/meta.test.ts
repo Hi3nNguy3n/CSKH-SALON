@@ -45,7 +45,7 @@ describe("Meta channel adapter", () => {
       channel: "facebook",
       senderId: "psid-1",
       recipientId: "page-1",
-      customerContact: "facebook:psid-1",
+      customerContact: "facebook:page-1:psid-1",
       customerName: "Facebook User",
       text: "Hello LED1000",
     });
@@ -72,7 +72,7 @@ describe("Meta channel adapter", () => {
       channel: "instagram",
       senderId: "ig-sender-1",
       recipientId: "ig-business-1",
-      customerContact: "instagram:ig-sender-1",
+      customerContact: "instagram:ig-business-1:ig-sender-1",
       customerName: "Instagram User",
       text: "Can I book?",
     });

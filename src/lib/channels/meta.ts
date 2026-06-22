@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { getPositiveIntegerEnv } from "@/lib/channels/hardening";
+import { findChannelAccount, getChannelConfigFallback } from "@/lib/channels/accounts";
 
 export type MetaChannel = "facebook" | "instagram";
 
@@ -95,7 +96,7 @@ export function parseMetaWebhookPayload(payload: unknown): MetaInboundEvent[] {
         channel,
         senderId,
         recipientId,
-        customerContact: `${channel}:${senderId}`,
+        customerContact: `${channel}:${recipientId}:${senderId}`,
         customerName: channel === "facebook" ? "Facebook User" : "Instagram User",
         text,
         rawEvent,
@@ -140,15 +141,25 @@ function getConfigString(config: unknown, key: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function getChannelConfig(channel: MetaChannel): Promise<unknown> {
+async function getChannelConfig(
+  channel: MetaChannel,
+  options: { channelAccountId?: string | null; externalAccountId?: string } = {}
+): Promise<unknown> {
   try {
-    const record = await prisma.channel.findUnique({
-      where: { type: channel },
-      select: { config: true },
-    });
-    return record?.config ?? {};
+    if (options.channelAccountId) {
+      const account = await prisma.channelAccount.findUnique({
+        where: { id: options.channelAccountId },
+        select: { config: true },
+      });
+      if (account?.config) return account.config;
+    }
+
+    const account = await findChannelAccount(channel, options.externalAccountId);
+    if (account?.config) return account.config;
+
+    return await getChannelConfigFallback(channel);
   } catch (error) {
-    logger.warn("[Meta] Failed to read channel config; falling back to env", {
+    logger.warn("[Meta] Failed to read account config; falling back to env", {
       channel,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -156,13 +167,19 @@ async function getChannelConfig(channel: MetaChannel): Promise<unknown> {
   }
 }
 
-async function getGraphVersionForChannel(channel: MetaChannel): Promise<string> {
-  const config = await getChannelConfig(channel);
+async function getGraphVersionForChannel(
+  channel: MetaChannel,
+  options: { channelAccountId?: string | null; externalAccountId?: string } = {}
+): Promise<string> {
+  const config = await getChannelConfig(channel, options);
   return getConfigString(config, "graphVersion") || getGraphVersion();
 }
 
-async function getAccessToken(channel: MetaChannel): Promise<string> {
-  const config = await getChannelConfig(channel);
+async function getAccessToken(
+  channel: MetaChannel,
+  options: { channelAccountId?: string | null; externalAccountId?: string } = {}
+): Promise<string> {
+  const config = await getChannelConfig(channel, options);
   const envName =
     channel === "facebook" ? "FACEBOOK_PAGE_ACCESS_TOKEN" : "INSTAGRAM_ACCESS_TOKEN";
   const configKey = channel === "facebook" ? "pageAccessToken" : "accessToken";
@@ -173,8 +190,11 @@ async function getAccessToken(channel: MetaChannel): Promise<string> {
   return token;
 }
 
-async function getSendEndpoint(channel: MetaChannel): Promise<string> {
-  const version = await getGraphVersionForChannel(channel);
+async function getSendEndpoint(
+  channel: MetaChannel,
+  options: { channelAccountId?: string | null; externalAccountId?: string } = {}
+): Promise<string> {
+  const version = await getGraphVersionForChannel(channel, options);
   const host =
     channel === "facebook" ? "https://graph.facebook.com" : "https://graph.instagram.com";
   return `${host}/${version}/me/messages`;
@@ -358,9 +378,15 @@ export async function sendMetaTextMessage(input: {
   channel: MetaChannel;
   recipientId: string;
   text: string;
+  channelAccountId?: string | null;
+  sourceAccountId?: string;
 }): Promise<void> {
-  const token = await getAccessToken(input.channel);
-  const endpoint = await getSendEndpoint(input.channel);
+  const accountOptions = {
+    channelAccountId: input.channelAccountId,
+    externalAccountId: input.sourceAccountId,
+  };
+  const token = await getAccessToken(input.channel, accountOptions);
+  const endpoint = await getSendEndpoint(input.channel, accountOptions);
   const chunks = splitMetaText(input.text);
 
   for (const [index, chunk] of chunks.entries()) {

@@ -85,6 +85,12 @@ def get_backend_url():
         or "http://127.0.0.1:3000"
     ).rstrip("/")
 
+def get_account_id():
+    return os.getenv("ZALO_ACCOUNT_ID", "").strip()
+
+def get_relay_secret():
+    return os.getenv("ZALO_RELAY_SECRET", "").strip()
+
 def fetch_ai_reply(author_id, text, thread_id):
     payload = {
         "authorId": str(author_id),
@@ -92,11 +98,19 @@ def fetch_ai_reply(author_id, text, thread_id):
         "message": text,
         "displayName": f"Zalo {author_id}",
     }
+    account_id = get_account_id()
+    if account_id:
+        payload["accountId"] = account_id
+
+    headers = {"Content-Type": "application/json"}
+    relay_secret = get_relay_secret()
+    if relay_secret:
+        headers["x-zalo-relay-secret"] = relay_secret
 
     req = urllib_request.Request(
         f"{get_backend_url()}/api/channels/zalo/incoming",
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
 

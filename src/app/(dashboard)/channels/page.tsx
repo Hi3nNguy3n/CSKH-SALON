@@ -16,10 +16,10 @@ import {
   PhoneCall,
   CheckCircle,
   XCircle,
+  AlertTriangle,
   Eye,
   EyeOff,
-  ChevronLeft,
-  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -37,9 +37,30 @@ interface ChannelData {
   qr?: string | null;
 }
 
+interface ChannelAccountData {
+  id: string;
+  type: string;
+  displayName: string;
+  externalAccountId: string;
+  isActive: boolean;
+  isDefault: boolean;
+  config: Record<string, unknown>;
+  status: string;
+  lastError?: string;
+}
+
 type WhatsAppMode = "web" | "api";
-const CHANNELS_PER_PAGE = 4;
-const CHANNEL_PAGE_ORDER = ["whatsapp", "email", "phone", "zalo", "facebook", "instagram"];
+const CHANNEL_PAGE_ORDER = ["facebook", "instagram", "zalo", "shopee", "tiktok_shop", "whatsapp", "email", "phone"];
+const ACCOUNT_MANAGED_CHANNEL_TYPES = ["facebook", "instagram", "shopee", "tiktok_shop"];
+const MARKETPLACE_CHANNEL_TYPES = ["shopee", "tiktok_shop"];
+const MARKETPLACE_CONNECTED_STATUSES = new Set([
+  "connected",
+  "authorized",
+  "webhook_verified",
+  "chat_receive_verified",
+  "chat_send_verified",
+  "production_ready",
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -143,6 +164,267 @@ function FieldInput({
   );
 }
 
+function SecretHint({ shown }: { shown: boolean }) {
+  if (!shown) return null;
+  return <p className="mt-1 text-[11px] text-owly-text-light">Để trống để giữ secret hiện có.</p>;
+}
+
+function getChannelLabel(type: string): string {
+  if (type === "facebook") return "Facebook";
+  if (type === "instagram") return "Instagram";
+  if (type === "zalo") return "Zalo";
+  if (type === "shopee") return "Shopee";
+  if (type === "tiktok_shop") return "TikTok Shop";
+  if (type === "whatsapp") return "WhatsApp";
+  if (type === "email") return "Email";
+  if (type === "phone") return "Điện thoại";
+  return type;
+}
+
+function getChannelDescription(type: string): string {
+  if (type === "facebook") return "Tin nhắn từ Facebook Page";
+  if (type === "instagram") return "Tin nhắn Instagram Direct";
+  if (type === "zalo") return "Tài khoản Zalo đang vận hành";
+  if (type === "shopee") return "Shopee Seller Chat";
+  if (type === "tiktok_shop") return "TikTok Shop Seller Chat";
+  if (type === "whatsapp") return "WhatsApp Web hoặc API";
+  if (type === "email") return "SMTP và IMAP";
+  if (type === "phone") return "Twilio và cuộc gọi";
+  return "Kênh liên hệ";
+}
+
+function getChannelAccent(type: string): string {
+  if (type === "facebook") return "bg-blue-50 text-blue-600";
+  if (type === "instagram") return "bg-pink-50 text-pink-600";
+  if (type === "zalo") return "bg-cyan-50 text-cyan-600";
+  if (type === "shopee") return "bg-orange-50 text-orange-600";
+  if (type === "tiktok_shop") return "bg-slate-100 text-slate-700";
+  if (type === "whatsapp") return "bg-green-50 text-green-600";
+  if (type === "email") return "bg-sky-50 text-sky-600";
+  if (type === "phone") return "bg-purple-50 text-purple-600";
+  return "bg-owly-primary-50 text-owly-primary";
+}
+
+function isMarketplaceChannel(type: string): boolean {
+  return MARKETPLACE_CHANNEL_TYPES.includes(type);
+}
+
+function isAccountManagedChannel(type: string): boolean {
+  return ACCOUNT_MANAGED_CHANNEL_TYPES.includes(type);
+}
+
+function isMarketplaceAccountReady(status: string): boolean {
+  return MARKETPLACE_CONNECTED_STATUSES.has(status);
+}
+
+function isChannelAccountReady(type: string, status: string): boolean {
+  return isMarketplaceChannel(type)
+    ? isMarketplaceAccountReady(status)
+    : status === "connected";
+}
+
+function ChannelIcon({ type }: { type: string }) {
+  if (type === "email") return <Mail className="h-4 w-4" />;
+  if (type === "phone") return <Phone className="h-4 w-4" />;
+  return <MessageCircle className="h-4 w-4" />;
+}
+
+function hasText(value: string): boolean {
+  return value.trim().length > 0;
+}
+
+function hasSecret(existingSecret: boolean, currentValue: string): boolean {
+  return existingSecret || hasText(currentValue);
+}
+
+function ConfigReadiness({
+  issues,
+  warnings = [],
+  isActive,
+}: {
+  issues: string[];
+  warnings?: string[];
+  isActive: boolean;
+}) {
+  if (issues.length === 0 && warnings.length === 0) {
+    return (
+      <div className="rounded-lg border border-owly-success/20 bg-owly-success/10 p-3 text-sm text-owly-success">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+          <span>{isActive ? "Đủ thông tin để lưu và bật kênh." : "Đủ thông tin cơ bản, có thể lưu nháp hoặc bật khi cần."}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-3 text-sm",
+        issues.length > 0 && isActive
+          ? "border-amber-300 bg-amber-50 text-amber-800"
+          : "border-owly-border bg-owly-bg text-owly-text-light"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+        <div className="space-y-2">
+          {issues.length > 0 && (
+            <div>
+              <p className="font-medium text-owly-text">
+                {isActive
+                  ? "Chưa thể lưu khi kênh đang bật. Cần bổ sung:"
+                  : "Có thể lưu nháp khi kênh đang tắt, nhưng cần bổ sung trước khi bật:"}
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                {issues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {warnings.length > 0 && (
+            <div>
+              <p className="font-medium text-owly-text">Khuyến nghị kiểm tra thêm:</p>
+              <ul className="mt-1 list-disc space-y-1 pl-4">
+                {warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChannelOverview({
+  channels,
+  accounts,
+  selectedType,
+  onSelect,
+}: {
+  channels: ChannelData[];
+  accounts: ChannelAccountData[];
+  selectedType: string;
+  onSelect: (type: string) => void;
+}) {
+  const connectedChannelCount = channels.filter(
+    (channel) => !isAccountManagedChannel(channel.type) && channel.status === "connected"
+  ).length;
+  const activeChannelCount = channels.filter(
+    (channel) => !isAccountManagedChannel(channel.type) && channel.isActive
+  ).length;
+  const connectedAccountManagedCount = ACCOUNT_MANAGED_CHANNEL_TYPES.filter((type) => {
+    const channelAccounts = accounts.filter((account) => account.type === type);
+    if (channelAccounts.length > 0) {
+      return channelAccounts.some((account) => isChannelAccountReady(type, account.status));
+    }
+    return channels.find((channel) => channel.type === type)?.status === "connected";
+  }).length;
+  const activeAccountManagedCount = ACCOUNT_MANAGED_CHANNEL_TYPES.filter((type) => {
+    const channelAccounts = accounts.filter((account) => account.type === type);
+    if (channelAccounts.length > 0) {
+      return channelAccounts.some((account) => account.isActive);
+    }
+    return Boolean(channels.find((channel) => channel.type === type)?.isActive);
+  }).length;
+  const connectedCount = connectedChannelCount + connectedAccountManagedCount;
+  const activeCount = activeChannelCount + activeAccountManagedCount;
+
+  return (
+    <section className="w-full space-y-4">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <h2 className="text-base font-semibold text-owly-text">Tổng quan kênh</h2>
+          <p className="mt-1 text-sm text-owly-text-light">
+            Chọn một kênh để xem trạng thái và cấu hình mặc định.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:justify-end">
+          <span className="rounded-full border border-owly-border bg-owly-surface px-3 py-1 text-xs text-owly-text-light">{connectedCount} đang kết nối</span>
+          <span className="rounded-full border border-owly-border bg-owly-surface px-3 py-1 text-xs text-owly-text-light">{activeCount} đang bật</span>
+          <Link
+            href="/channels/accounts"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-owly-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-owly-primary-dark"
+          >
+            <Key className="h-4 w-4" />
+            Quản lý {accounts.length} tài khoản
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {CHANNEL_PAGE_ORDER.map((type) => {
+          const channel = channels.find((item) => item.type === type);
+          const channelAccounts = accounts.filter((account) => account.type === type);
+          const accountCount = channelAccounts.length;
+          const isSelected = selectedType === type;
+          const isAccountManaged = isAccountManagedChannel(type);
+          const isConnected = isAccountManaged && accountCount > 0
+            ? channelAccounts.some((account) => isChannelAccountReady(type, account.status))
+            : channel?.status === "connected";
+          const isActive = isAccountManaged && accountCount > 0
+            ? channelAccounts.some((account) => account.isActive)
+            : Boolean(channel?.isActive);
+          const statusText = isAccountManaged && accountCount === 0
+            ? "Chưa có account"
+            : isConnected
+              ? "Đã kết nối"
+              : isActive
+                ? "Đã khai báo"
+                : "Chưa bật";
+
+          return (
+            <button
+              key={type}
+              type="button"
+              onClick={() => onSelect(type)}
+              className={cn(
+                "text-left rounded-lg border bg-owly-surface p-4 transition-colors",
+                isSelected
+                  ? "border-owly-primary ring-2 ring-owly-primary/15"
+                  : "border-owly-border hover:border-owly-primary/40 hover:bg-owly-primary-50/30"
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={cn("rounded-lg p-2", getChannelAccent(type))}>
+                    <ChannelIcon type={type} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-owly-text">
+                      {getChannelLabel(type)}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs text-owly-text-light">
+                      {getChannelDescription(type)}
+                    </span>
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    "mt-1 h-2 w-2 rounded-full",
+                    isConnected ? "bg-owly-success" : isActive ? "bg-amber-500" : "bg-owly-border"
+                  )}
+                />
+              </div>
+              <div className="mt-4 flex items-center justify-between text-xs">
+                <span className={isConnected ? "text-owly-success" : "text-owly-text-light"}>
+                  {statusText}
+                </span>
+                <span className="text-owly-text-light">
+                  {accountCount} account
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // WhatsApp Card
 // ---------------------------------------------------------------------------
@@ -158,14 +440,27 @@ function WhatsAppCard({
   onAction: (type: string, action: string) => void;
   saving: boolean;
 }) {
-  const cfg = channel.config as Record<string, string>;
+  const cfg = channel.config as Record<string, string | boolean>;
   const [isActive, setIsActive] = useState(channel.isActive);
   const [mode, setMode] = useState<WhatsAppMode>(
-    (cfg.mode as WhatsAppMode) || "web"
+    (String(cfg.mode || "web") as WhatsAppMode)
   );
-  const [apiKey, setApiKey] = useState(cfg.apiKey || "");
-  const [phoneNumber, setPhoneNumber] = useState(cfg.phoneNumber || "");
+  const [apiKey, setApiKey] = useState(String(cfg.apiKey || ""));
+  const [phoneNumber, setPhoneNumber] = useState(String(cfg.phoneNumber || ""));
   const isConnected = channel.status === "connected";
+  const hasApiKey = Boolean(cfg.hasApiKey);
+  const readinessIssues =
+    mode === "api"
+      ? [
+          !hasSecret(hasApiKey, apiKey) ? "Thiếu WhatsApp API key." : "",
+          !hasText(phoneNumber) ? "Thiếu số điện thoại WhatsApp dùng để gửi/nhận." : "",
+        ].filter(Boolean)
+      : [];
+  const readinessWarnings =
+    mode === "web" && isActive && !isConnected
+      ? ["WhatsApp Web cần bấm Kết nối và quét QR để nhận tin nhắn thực tế."]
+      : [];
+  const saveDisabled = saving || (isActive && readinessIssues.length > 0);
 
   return (
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
@@ -179,7 +474,7 @@ function WhatsAppCard({
             <div>
               <h3 className="font-semibold text-owly-text">WhatsApp</h3>
               <p className="text-xs text-owly-text-light mt-0.5">
-                Messaging via WhatsApp Web or API
+                Nhận và gửi tin nhắn qua WhatsApp Web hoặc API
               </p>
             </div>
           </div>
@@ -195,7 +490,7 @@ function WhatsAppCard({
         {/* Mode selector */}
         <div>
           <label className="block text-xs font-medium text-owly-text-light mb-2">
-            Connection Method
+            Phương thức kết nối
           </label>
           <div className="flex gap-2">
             <button
@@ -234,12 +529,12 @@ function WhatsAppCard({
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="h-4 w-4 text-green-600" />
                   <span className="text-sm font-medium text-green-700">
-                    Session Active
+                    Phiên đang hoạt động
                   </span>
                 </div>
                 {phoneNumber && (
                   <p className="text-sm text-green-600">
-                    Phone: {phoneNumber}
+                    Số điện thoại: {phoneNumber}
                   </p>
                 )}
                 <button
@@ -248,7 +543,7 @@ function WhatsAppCard({
                   className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
                 >
                   <WifiOff className="h-3.5 w-3.5" />
-                  Disconnect
+                  Ngắt kết nối
                 </button>
               </div>
             ) : (
@@ -272,7 +567,7 @@ function WhatsAppCard({
                   className="mt-3 flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Wifi className="h-4 w-4" />
-                  Connect
+                  Kết nối
                 </button>
               </div>
             )}
@@ -283,11 +578,11 @@ function WhatsAppCard({
               label="API Key"
               value={apiKey}
               onChange={setApiKey}
-              placeholder="Enter your WhatsApp API key"
+              placeholder="Nhập API key WhatsApp"
               isSecret
             />
             <FieldInput
-              label="Phone Number"
+              label="Số điện thoại"
               value={phoneNumber}
               onChange={setPhoneNumber}
               placeholder="+1234567890"
@@ -296,7 +591,7 @@ function WhatsAppCard({
               <div className="rounded-lg border border-green-200 bg-green-50 p-3 flex items-center gap-2">
                 <CheckCircle className="h-4 w-4 text-green-600" />
                 <span className="text-sm text-green-700">
-                  API connected - Phone: {phoneNumber || "N/A"}
+                  API đã kết nối - Số: {phoneNumber || "N/A"}
                 </span>
               </div>
             )}
@@ -305,10 +600,15 @@ function WhatsAppCard({
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50">
+      <div className="space-y-3 border-t border-owly-border bg-owly-bg/50 px-5 py-3">
+        <ConfigReadiness
+          issues={readinessIssues}
+          warnings={readinessWarnings}
+          isActive={isActive}
+        />
         <button
           type="button"
-          disabled={saving}
+          disabled={saveDisabled}
           onClick={() =>
             onSave(
               "whatsapp",
@@ -323,7 +623,7 @@ function WhatsAppCard({
           ) : (
             <Save className="h-4 w-4" />
           )}
-          Save
+          Lưu
         </button>
       </div>
     </div>
@@ -345,26 +645,40 @@ function EmailCard({
   onAction: (type: string, action: string) => void;
   saving: boolean;
 }) {
-  const cfg = channel.config as Record<string, string>;
+  const cfg = channel.config as Record<string, string | boolean>;
   const [isActive, setIsActive] = useState(channel.isActive);
 
-  const [smtpHost, setSmtpHost] = useState(cfg.smtpHost || "");
-  const [smtpPort, setSmtpPort] = useState(cfg.smtpPort || "587");
-  const [smtpUser, setSmtpUser] = useState(cfg.smtpUser || "");
-  const [smtpPass, setSmtpPass] = useState(cfg.smtpPass || "");
-  const [smtpFrom, setSmtpFrom] = useState(cfg.smtpFrom || "");
+  const [smtpHost, setSmtpHost] = useState(String(cfg.smtpHost || ""));
+  const [smtpPort, setSmtpPort] = useState(String(cfg.smtpPort || "587"));
+  const [smtpUser, setSmtpUser] = useState(String(cfg.smtpUser || ""));
+  const [smtpPass, setSmtpPass] = useState(String(cfg.smtpPass || ""));
+  const [smtpFrom, setSmtpFrom] = useState(String(cfg.smtpFrom || ""));
 
-  const [imapHost, setImapHost] = useState(cfg.imapHost || "");
-  const [imapPort, setImapPort] = useState(cfg.imapPort || "993");
-  const [imapUser, setImapUser] = useState(cfg.imapUser || "");
-  const [imapPass, setImapPass] = useState(cfg.imapPass || "");
+  const [imapHost, setImapHost] = useState(String(cfg.imapHost || ""));
+  const [imapPort, setImapPort] = useState(String(cfg.imapPort || "993"));
+  const [imapUser, setImapUser] = useState(String(cfg.imapUser || ""));
+  const [imapPass, setImapPass] = useState(String(cfg.imapPass || ""));
 
   const [testResult, setTestResult] = useState<string | null>(null);
+  const hasSmtpPass = Boolean(cfg.hasSmtpPass);
+  const hasImapPass = Boolean(cfg.hasImapPass);
+  const readinessIssues = [
+    !hasText(smtpHost) ? "Thiếu SMTP host để gửi email." : "",
+    !hasText(smtpPort) ? "Thiếu SMTP port." : "",
+    !hasText(smtpUser) ? "Thiếu tài khoản SMTP." : "",
+    !hasSecret(hasSmtpPass, smtpPass) ? "Thiếu mật khẩu SMTP." : "",
+    !hasText(smtpFrom) ? "Thiếu email gửi đi." : "",
+    !hasText(imapHost) ? "Thiếu IMAP host để nhận email." : "",
+    !hasText(imapPort) ? "Thiếu IMAP port." : "",
+    !hasText(imapUser) ? "Thiếu tài khoản IMAP." : "",
+    !hasSecret(hasImapPass, imapPass) ? "Thiếu mật khẩu IMAP." : "",
+  ].filter(Boolean);
+  const saveDisabled = saving || (isActive && readinessIssues.length > 0);
 
   const handleTest = async () => {
     setTestResult(null);
     onAction("email", "test");
-    setTestResult("Test initiated - check server logs for results");
+    setTestResult("Đã bắt đầu kiểm tra - xem log server để biết kết quả");
     setTimeout(() => setTestResult(null), 4000);
   };
 
@@ -380,7 +694,7 @@ function EmailCard({
             <div>
               <h3 className="font-semibold text-owly-text">Email</h3>
               <p className="text-xs text-owly-text-light mt-0.5">
-                Send and receive via SMTP / IMAP
+                Gửi và nhận email qua SMTP / IMAP
               </p>
             </div>
           </div>
@@ -396,7 +710,7 @@ function EmailCard({
         {/* SMTP */}
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-owly-text-light mb-3">
-            SMTP Settings (Outgoing)
+            SMTP (gửi đi)
           </h4>
           <div className="grid grid-cols-2 gap-3">
             <FieldInput
@@ -413,22 +727,22 @@ function EmailCard({
               type="text"
             />
             <FieldInput
-              label="Username"
+              label="Tài khoản"
               value={smtpUser}
               onChange={setSmtpUser}
               placeholder="user@example.com"
             />
             <FieldInput
-              label="Password"
+              label="Mật khẩu"
               value={smtpPass}
               onChange={setSmtpPass}
-              placeholder="Password"
+              placeholder="Mật khẩu"
               isSecret
             />
           </div>
           <div className="mt-3">
             <FieldInput
-              label="From Address"
+              label="Email gửi đi"
               value={smtpFrom}
               onChange={setSmtpFrom}
               placeholder="noreply@example.com"
@@ -439,7 +753,7 @@ function EmailCard({
         {/* IMAP */}
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-owly-text-light mb-3">
-            IMAP Settings (Incoming)
+            IMAP (nhận vào)
           </h4>
           <div className="grid grid-cols-2 gap-3">
             <FieldInput
@@ -456,16 +770,16 @@ function EmailCard({
               type="text"
             />
             <FieldInput
-              label="Username"
+              label="Tài khoản"
               value={imapUser}
               onChange={setImapUser}
               placeholder="user@example.com"
             />
             <FieldInput
-              label="Password"
+              label="Mật khẩu"
               value={imapPass}
               onChange={setImapPass}
-              placeholder="Password"
+              placeholder="Mật khẩu"
               isSecret
             />
           </div>
@@ -481,44 +795,48 @@ function EmailCard({
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() =>
-            onSave(
-              "email",
-              {
-                smtpHost,
-                smtpPort,
-                smtpUser,
-                smtpPass,
-                smtpFrom,
-                imapHost,
-                imapPort,
-                imapUser,
-                imapPass,
-              },
-              isActive
-            )
-          }
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={handleTest}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
-        >
-          <TestTube className="h-4 w-4" />
-          Test Connection
-        </button>
+      <div className="space-y-3 border-t border-owly-border bg-owly-bg/50 px-5 py-3">
+        <ConfigReadiness issues={readinessIssues} isActive={isActive} />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={saveDisabled}
+            onClick={() =>
+              onSave(
+                "email",
+                {
+                  smtpHost,
+                  smtpPort,
+                  smtpUser,
+                  smtpPass,
+                  smtpFrom,
+                  imapHost,
+                  imapPort,
+                  imapUser,
+                  imapPass,
+                },
+                isActive
+              )
+            }
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Lưu
+          </button>
+          <button
+            type="button"
+            disabled={readinessIssues.length > 0}
+            onClick={handleTest}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50 transition-colors"
+          >
+            <TestTube className="h-4 w-4" />
+            Kiểm tra kết nối
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -539,20 +857,20 @@ function PhoneCard({
   onAction: (type: string, action: string) => void;
   saving: boolean;
 }) {
-  const cfg = channel.config as Record<string, string>;
+  const cfg = channel.config as Record<string, string | boolean>;
   const [isActive, setIsActive] = useState(channel.isActive);
 
-  const [twilioSid, setTwilioSid] = useState(cfg.twilioSid || "");
-  const [twilioToken, setTwilioToken] = useState(cfg.twilioToken || "");
-  const [twilioPhone, setTwilioPhone] = useState(cfg.twilioPhone || "");
+  const [twilioSid, setTwilioSid] = useState(String(cfg.twilioSid || ""));
+  const [twilioToken, setTwilioToken] = useState(String(cfg.twilioToken || ""));
+  const [twilioPhone, setTwilioPhone] = useState(String(cfg.twilioPhone || ""));
 
-  const [elevenLabsKey, setElevenLabsKey] = useState(cfg.elevenLabsKey || "");
+  const [elevenLabsKey, setElevenLabsKey] = useState(String(cfg.elevenLabsKey || ""));
   const [elevenLabsVoice, setElevenLabsVoice] = useState(
-    cfg.elevenLabsVoice || ""
+    String(cfg.elevenLabsVoice || "")
   );
 
   const voiceOptions = [
-    { id: "", label: "Select a voice..." },
+    { id: "", label: "Chọn giọng đọc..." },
     { id: "rachel", label: "Rachel - Calm, professional" },
     { id: "drew", label: "Drew - Friendly, warm" },
     { id: "clyde", label: "Clyde - Authoritative" },
@@ -561,11 +879,27 @@ function PhoneCard({
   ];
 
   const [testResult, setTestResult] = useState<string | null>(null);
+  const hasTwilioToken = Boolean(cfg.hasTwilioToken);
+  const hasElevenLabsKey = Boolean(cfg.hasElevenLabsKey);
+  const readinessIssues = [
+    !hasText(twilioSid) ? "Thiếu Twilio Account SID." : "",
+    !hasSecret(hasTwilioToken, twilioToken) ? "Thiếu Twilio Auth Token." : "",
+    !hasText(twilioPhone) ? "Thiếu số điện thoại Twilio để gọi/gửi SMS." : "",
+  ].filter(Boolean);
+  const readinessWarnings = [
+    !hasSecret(hasElevenLabsKey, elevenLabsKey)
+      ? "Chưa có ElevenLabs API key; luồng thoại có thể không tổng hợp được giọng nói."
+      : "",
+    !hasText(elevenLabsVoice)
+      ? "Chưa chọn giọng đọc ElevenLabs; cần chọn nếu dùng trả lời thoại tự động."
+      : "",
+  ].filter(Boolean);
+  const saveDisabled = saving || (isActive && readinessIssues.length > 0);
 
   const handleTestCall = () => {
     setTestResult(null);
     onAction("phone", "test");
-    setTestResult("Test call initiated - check Twilio dashboard for status");
+    setTestResult("Đã bắt đầu gọi thử - kiểm tra Twilio để xem trạng thái");
     setTimeout(() => setTestResult(null), 4000);
   };
 
@@ -581,7 +915,7 @@ function PhoneCard({
             <div>
               <h3 className="font-semibold text-owly-text">Phone</h3>
               <p className="text-xs text-owly-text-light mt-0.5">
-                Voice calls via Twilio and ElevenLabs
+                Cuộc gọi thoại qua Twilio và ElevenLabs
               </p>
             </div>
           </div>
@@ -597,7 +931,7 @@ function PhoneCard({
         {/* Twilio */}
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-owly-text-light mb-3">
-            Twilio Settings
+            Twilio
           </h4>
           <div className="space-y-3">
             <FieldInput
@@ -614,7 +948,7 @@ function PhoneCard({
               isSecret
             />
             <FieldInput
-              label="Phone Number"
+              label="Số điện thoại"
               value={twilioPhone}
               onChange={setTwilioPhone}
               placeholder="+1234567890"
@@ -637,7 +971,7 @@ function PhoneCard({
             />
             <div>
               <label className="block text-xs font-medium text-owly-text-light mb-1">
-                Voice
+                Giọng đọc
               </label>
               <select
                 value={elevenLabsVoice}
@@ -664,40 +998,48 @@ function PhoneCard({
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() =>
-            onSave(
-              "phone",
-              {
-                twilioSid,
-                twilioToken,
-                twilioPhone,
-                elevenLabsKey,
-                elevenLabsVoice,
-              },
-              isActive
-            )
-          }
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={handleTestCall}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 transition-colors"
-        >
-          <PhoneCall className="h-4 w-4" />
-          Test Call
-        </button>
+      <div className="space-y-3 border-t border-owly-border bg-owly-bg/50 px-5 py-3">
+        <ConfigReadiness
+          issues={readinessIssues}
+          warnings={readinessWarnings}
+          isActive={isActive}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={saveDisabled}
+            onClick={() =>
+              onSave(
+                "phone",
+                {
+                  twilioSid,
+                  twilioToken,
+                  twilioPhone,
+                  elevenLabsKey,
+                  elevenLabsVoice,
+                },
+                isActive
+              )
+            }
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Lưu
+          </button>
+          <button
+            type="button"
+            disabled={readinessIssues.length > 0}
+            onClick={handleTestCall}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-purple-600 bg-purple-50 border border-purple-200 rounded-lg hover:bg-purple-100 disabled:opacity-50 transition-colors"
+          >
+            <PhoneCall className="h-4 w-4" />
+            Gọi thử
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -714,12 +1056,26 @@ function ZaloCard({
   onAction: (type: string, action: string) => void;
   saving: boolean;
 }) {
-  const cfg = channel.config as Record<string, string>;
+  const cfg = channel.config as Record<string, string | boolean>;
   const [isActive, setIsActive] = useState(channel.isActive);
-  const [pythonCommand, setPythonCommand] = useState(cfg.pythonCommand || "python3");
-  const [scriptPath, setScriptPath] = useState(cfg.scriptPath || "zalo_bot.py");
-  const [cookiesInput, setCookiesInput] = useState(cfg.cookiesInput || "");
+  const [pythonCommand, setPythonCommand] = useState(String(cfg.pythonCommand || "python3"));
+  const [scriptPath, setScriptPath] = useState(String(cfg.scriptPath || "zalo_bot.py"));
+  const [cookiesInput, setCookiesInput] = useState(String(cfg.cookiesInput || ""));
+  const [relaySecret, setRelaySecret] = useState("");
   const isConnected = channel.status === "connected";
+  const hasCookiesInput = Boolean(cfg.hasCookiesInput);
+  const hasRelaySecret = Boolean(cfg.hasRelaySecret);
+  const readinessIssues = [
+    !hasText(pythonCommand) ? "Thiếu Python command để chạy Zalo relay." : "",
+    !hasText(scriptPath) ? "Thiếu đường dẫn script Zalo relay." : "",
+    !hasSecret(hasCookiesInput, cookiesInput) ? "Thiếu cookies/session Zalo." : "",
+  ].filter(Boolean);
+  const readinessWarnings = [
+    !hasSecret(hasRelaySecret, relaySecret)
+      ? "Chưa có relay secret; endpoint incoming sẽ không xác thực header bí mật riêng cho relay này."
+      : "",
+  ].filter(Boolean);
+  const saveDisabled = saving || (isActive && readinessIssues.length > 0);
 
   return (
     <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
@@ -744,18 +1100,29 @@ function ZaloCard({
       </div>
 
       <div className="p-5 space-y-4">
-        <FieldInput
-          label="Python Command"
-          value={pythonCommand}
-          onChange={setPythonCommand}
-          placeholder="python3"
-        />
-        <FieldInput
-          label="Script Path"
-          value={scriptPath}
-          onChange={setScriptPath}
-          placeholder="zalo_bot.py"
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <FieldInput
+            label="Python Command"
+            value={pythonCommand}
+            onChange={setPythonCommand}
+            placeholder="python3"
+          />
+          <FieldInput
+            label="Script Path"
+            value={scriptPath}
+            onChange={setScriptPath}
+            placeholder="zalo_bot.py"
+          />
+          <div>
+            <FieldInput
+              label="Relay secret"
+              value={relaySecret}
+              onChange={setRelaySecret}
+              isSecret
+            />
+            <SecretHint shown={hasRelaySecret} />
+          </div>
+        </div>
         <div>
           <label className="block text-xs font-medium text-owly-text-light mb-1">
             Cookies
@@ -767,6 +1134,7 @@ function ZaloCard({
             placeholder='{"cookies": {...}, "imei": "...", "userAgent": "..."}'
             className="w-full px-3 py-2 text-sm border border-owly-border rounded-lg bg-owly-bg text-owly-text placeholder:text-owly-text-light/50 focus:outline-none focus:ring-2 focus:ring-owly-primary/30 focus:border-owly-primary transition-colors resize-none"
           />
+          <SecretHint shown={hasCookiesInput} />
         </div>
 
         {isConnected ? (
@@ -779,229 +1147,123 @@ function ZaloCard({
         ) : null}
       </div>
 
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() =>
-            onSave(
-              "zalo",
-              { pythonCommand, scriptPath, cookiesInput },
-              isActive
-            )
-          }
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save
-        </button>
-        <button
-          type="button"
-          onClick={() => onAction("zalo", isConnected ? "disconnect" : "connect")}
-          className={cn(
-            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors",
-            isConnected
-              ? "text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
-              : "text-cyan-700 bg-cyan-50 border border-cyan-200 hover:bg-cyan-100"
-          )}
-        >
-          {isConnected ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
-          {isConnected ? "Disconnect" : "Connect"}
-        </button>
-        <button
-          type="button"
-          onClick={() => onAction("zalo", "test")}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg hover:bg-cyan-100 transition-colors"
-        >
-          <TestTube className="h-4 w-4" />
-          Test
-        </button>
+      <div className="space-y-3 border-t border-owly-border bg-owly-bg/50 px-5 py-3">
+        <ConfigReadiness
+          issues={readinessIssues}
+          warnings={readinessWarnings}
+          isActive={isActive}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={saveDisabled}
+            onClick={() =>
+              onSave(
+                "zalo",
+                { pythonCommand, scriptPath, cookiesInput, relaySecret },
+                isActive
+              )
+            }
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
+          >
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            Lưu
+          </button>
+          <button
+            type="button"
+            disabled={!isConnected && readinessIssues.length > 0}
+            onClick={() => onAction("zalo", isConnected ? "disconnect" : "connect")}
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors disabled:opacity-50",
+              isConnected
+                ? "text-red-600 bg-red-50 border border-red-200 hover:bg-red-100"
+                : "text-cyan-700 bg-cyan-50 border border-cyan-200 hover:bg-cyan-100"
+            )}
+          >
+            {isConnected ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
+            {isConnected ? "Ngắt kết nối" : "Kết nối"}
+          </button>
+          <button
+            type="button"
+            disabled={readinessIssues.length > 0}
+            onClick={() => onAction("zalo", "test")}
+            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-cyan-700 bg-cyan-50 border border-cyan-200 rounded-lg hover:bg-cyan-100 disabled:opacity-50 transition-colors"
+          >
+            <TestTube className="h-4 w-4" />
+            Kiểm tra
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Meta Channel Card
-// ---------------------------------------------------------------------------
-
-type MetaChannelType = "facebook" | "instagram";
-
-function MetaReadinessBadge({
-  isActive,
-  hasAccessToken,
-}: {
-  isActive: boolean;
-  hasAccessToken: boolean;
-}) {
-  const label = hasAccessToken ? (isActive ? "Đã bật" : "Đã cấu hình") : "Thiếu token";
-  const isReady = hasAccessToken && isActive;
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium",
-        isReady
-          ? "bg-owly-success/10 text-owly-success"
-          : hasAccessToken
-            ? "bg-amber-50 text-amber-700"
-            : "bg-owly-danger/10 text-owly-danger"
-      )}
-    >
-      <span
-        className={cn(
-          "w-1.5 h-1.5 rounded-full",
-          isReady ? "bg-owly-success" : hasAccessToken ? "bg-amber-500" : "bg-owly-danger"
-        )}
-      />
-      {label}
-    </span>
-  );
-}
-
-function SecretIndicator({ label, enabled }: { label: string; enabled: boolean }) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-owly-border bg-owly-bg px-3 py-2">
-      <span className="text-xs font-medium text-owly-text-light">{label}</span>
-      <span
-        className={cn(
-          "text-xs font-medium",
-          enabled ? "text-owly-success" : "text-owly-danger"
-        )}
-      >
-        {enabled ? "Đã có" : "Chưa có"}
-      </span>
-    </div>
-  );
-}
-
-function MetaChannelCard({
-  channel,
+function AccountManagedChannelPanel({
   type,
-  onSave,
-  saving,
+  accounts,
 }: {
-  channel: ChannelData;
-  type: MetaChannelType;
-  onSave: (type: string, config: Record<string, unknown>, isActive: boolean) => void;
-  saving: boolean;
+  type: string;
+  accounts: ChannelAccountData[];
 }) {
-  const cfg = channel.config as Record<string, string | boolean>;
-  const isFacebook = type === "facebook";
-  const [isActive, setIsActive] = useState(channel.isActive);
-  const [verifyToken, setVerifyToken] = useState(String(cfg.verifyToken || ""));
-  const [accountId, setAccountId] = useState(
-    String(isFacebook ? cfg.pageId || "" : cfg.businessAccountId || "")
-  );
-  const [graphVersion, setGraphVersion] = useState(String(cfg.graphVersion || "v25.0"));
-  const hasAccessToken = Boolean(
-    isFacebook ? cfg.hasPageAccessToken : cfg.hasAccessToken
-  );
-  const hasAppSecret = Boolean(cfg.hasAppSecret);
-  const title = isFacebook ? "Facebook Messenger" : "Instagram Direct";
-  const description = isFacebook
-    ? "Nhận và trả lời tin nhắn từ Facebook Page"
-    : "Nhận và trả lời tin nhắn Instagram Direct";
+  const channelAccounts = accounts.filter((account) => account.type === type);
+  const activeCount = channelAccounts.filter((account) => account.isActive).length;
+  const readyCount = channelAccounts.filter((account) => isChannelAccountReady(type, account.status)).length;
+  const webhookPath = type === "tiktok_shop" ? "/api/webhooks/tiktok-shop" : isMarketplaceChannel(type) ? "/api/webhooks/shopee" : "/api/webhooks/meta";
+  const platformName = getChannelLabel(type);
 
   return (
-    <div className="bg-owly-surface rounded-xl border border-owly-border overflow-hidden">
-      <div className="px-5 py-4 border-b border-owly-border">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div
-              className={cn(
-                "p-2.5 rounded-lg",
-                isFacebook ? "bg-blue-50 text-blue-600" : "bg-pink-50 text-pink-600"
-              )}
-            >
-              <MessageCircle className="h-5 w-5" />
-            </div>
+    <div className="rounded-xl border border-owly-border bg-owly-surface p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className={cn("rounded-lg p-2", getChannelAccent(type))}>
+              <ChannelIcon type={type} />
+            </span>
             <div>
-              <h3 className="font-semibold text-owly-text">{title}</h3>
-              <p className="text-xs text-owly-text-light mt-0.5">{description}</p>
+              <h3 className="text-base font-semibold text-owly-text">{platformName}</h3>
+              <p className="text-sm text-owly-text-light">
+                Kênh này dùng mô hình nhiều account. Token, secret và cấu hình gửi nhận được quản lý tại trang Tài khoản kết nối.
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <MetaReadinessBadge isActive={isActive} hasAccessToken={hasAccessToken} />
-            <Toggle enabled={isActive} onChange={setIsActive} />
+          <div className="rounded-lg border border-owly-border bg-owly-bg/50 px-3 py-2 font-mono text-xs text-owly-text break-all">
+            Webhook: {webhookPath}
           </div>
         </div>
-      </div>
 
-      <div className="p-5 space-y-4">
-        <div className="rounded-lg border border-owly-primary/20 bg-owly-primary-50/40 p-3">
-          <p className="text-xs text-owly-text">
-            Webhook dùng chung: <span className="font-mono">/api/webhooks/meta</span>
-          </p>
-        </div>
-
-        <FieldInput
-          label="Webhook Verify Token"
-          value={verifyToken}
-          onChange={setVerifyToken}
-          placeholder="meta-test-token-123"
-          isSecret
-        />
-        <FieldInput
-          label={isFacebook ? "Page ID" : "Instagram Business Account ID"}
-          value={accountId}
-          onChange={setAccountId}
-          placeholder={isFacebook ? "1234567890" : "17841400000000000"}
-        />
-        <FieldInput
-          label="Graph API Version"
-          value={graphVersion}
-          onChange={setGraphVersion}
-          placeholder="v25.0"
-        />
-
-        <div className="grid grid-cols-2 gap-3">
-          <SecretIndicator
-            label={isFacebook ? "Page Token" : "Access Token"}
-            enabled={hasAccessToken}
-          />
-          <SecretIndicator label="App Secret" enabled={hasAppSecret} />
-        </div>
-      </div>
-
-      <div className="px-5 py-3 border-t border-owly-border bg-owly-bg/50 flex items-center gap-2">
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() =>
-            onSave(
-              type,
-              {
-                verifyToken,
-                graphVersion,
-                ...(isFacebook
-                  ? { pageId: accountId }
-                  : { businessAccountId: accountId }),
-              },
-              isActive
-            )
-          }
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-owly-primary rounded-lg hover:bg-owly-primary-dark disabled:opacity-50 transition-colors"
-        >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
-          Save
-        </button>
         <Link
-          href="/settings"
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-owly-primary bg-owly-primary-50 border border-owly-primary/20 rounded-lg hover:bg-owly-primary-100 transition-colors"
+          href="/channels/accounts"
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-owly-primary px-4 py-2 text-sm font-semibold text-white hover:bg-owly-primary-dark"
         >
           <Key className="h-4 w-4" />
-          Cấu hình secret
+          Quản lý tài khoản
         </Link>
       </div>
+
+      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Tổng account</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{channelAccounts.length}</p>
+        </div>
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Đang bật</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{activeCount}</p>
+        </div>
+        <div className="rounded-lg border border-owly-border bg-owly-bg/40 p-3">
+          <p className="text-xs text-owly-text-light">Sẵn sàng</p>
+          <p className="mt-1 text-xl font-semibold text-owly-text">{readyCount}</p>
+        </div>
+      </div>
+
+      {channelAccounts.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Chưa có account nào cho {platformName}. Hãy thêm account trước, sau đó chạy kiểm tra kết nối và webhook.
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1012,9 +1274,10 @@ function MetaChannelCard({
 
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelData[]>([]);
+  const [accounts, setAccounts] = useState<ChannelAccountData[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [selectedChannelType, setSelectedChannelType] = useState(CHANNEL_PAGE_ORDER[0]);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -1031,8 +1294,10 @@ export default function ChannelsPage() {
   const fetchChannels = useCallback(async () => {
     try {
       const res = await fetch("/api/channels");
+      const accountRes = await fetch("/api/channel-accounts");
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
+      if (accountRes.ok) setAccounts(await accountRes.json());
       const [whatsappRes, zaloRes] = await Promise.all([
         fetch("/api/channels/whatsapp"),
         fetch("/api/channels/zalo"),
@@ -1151,13 +1416,17 @@ export default function ChannelsPage() {
       status: "disconnected",
     };
 
-  const totalPages = Math.ceil(CHANNEL_PAGE_ORDER.length / CHANNELS_PER_PAGE);
-  const visibleChannelTypes = CHANNEL_PAGE_ORDER.slice(
-    (currentPage - 1) * CHANNELS_PER_PAGE,
-    currentPage * CHANNELS_PER_PAGE
-  );
-
   const renderChannelCard = (type: string) => {
+    if (isAccountManagedChannel(type)) {
+      return (
+        <AccountManagedChannelPanel
+          key={type}
+          type={type}
+          accounts={accounts}
+        />
+      );
+    }
+
     if (type === "whatsapp") {
       return (
         <WhatsAppCard
@@ -1206,18 +1475,6 @@ export default function ChannelsPage() {
       );
     }
 
-    if (type === "facebook" || type === "instagram") {
-      return (
-        <MetaChannelCard
-          key={type}
-          channel={getChannel(type)}
-          type={type}
-          onSave={handleSave}
-          saving={saving}
-        />
-      );
-    }
-
     return null;
   };
 
@@ -1225,7 +1482,7 @@ export default function ChannelsPage() {
     <>
       <Header
         title="Kênh liên hệ"
-        description="Connect and manage your communication channels"
+        description="Theo dõi trạng thái kênh và cấu hình mặc định"
       />
 
       <div className="flex-1 overflow-auto p-6">
@@ -1234,36 +1491,33 @@ export default function ChannelsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-owly-primary" />
           </div>
         ) : (
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 max-w-7xl">
-              {visibleChannelTypes.map(renderChannelCard)}
-            </div>
+          <div className="w-full max-w-screen-2xl space-y-6">
+            <ChannelOverview
+              channels={channels}
+              accounts={accounts}
+              selectedType={selectedChannelType}
+              onSelect={setSelectedChannelType}
+            />
 
-            <div className="flex items-center justify-between max-w-7xl border-t border-owly-border pt-4">
-              <p className="text-sm text-owly-text-light">
-                Trang {currentPage} / {totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                  disabled={currentPage === 1}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-owly-text bg-owly-surface border border-owly-border rounded-lg hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  Trước
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                  disabled={currentPage === totalPages}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-owly-text bg-owly-surface border border-owly-border rounded-lg hover:bg-owly-primary-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  Sau
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+            <section className="space-y-3">
+              <div className="flex flex-col gap-1">
+                <h2 className="text-base font-semibold text-owly-text">
+                  {isAccountManagedChannel(selectedChannelType)
+                    ? `Tài khoản kết nối: ${getChannelLabel(selectedChannelType)}`
+                    : `Cấu hình mặc định: ${getChannelLabel(selectedChannelType)}`}
+                </h2>
+                <p className="text-sm text-owly-text-light">
+                  {isMarketplaceChannel(selectedChannelType)
+                    ? "Marketplace được quản lý theo từng shop/account, không dùng cấu hình mặc định ở trang này."
+                    : isAccountManagedChannel(selectedChannelType)
+                      ? "Facebook và Instagram được quản lý theo từng Page/Business account tại trang Tài khoản kết nối."
+                    : "Dùng cho trạng thái kênh và tương thích các luồng cấu hình cũ."}
+                </p>
               </div>
-            </div>
+              <div className="w-full max-w-5xl">
+                {renderChannelCard(selectedChannelType)}
+              </div>
+            </section>
           </div>
         )}
       </div>

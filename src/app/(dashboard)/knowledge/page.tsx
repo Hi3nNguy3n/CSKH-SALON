@@ -82,6 +82,11 @@ interface ImportPreview {
   success: boolean;
   filename: string;
   sourceType: string;
+  suggestedKnowledgeKind?: string | null;
+  suggestedCategoryId?: string | null;
+  suggestedCategoryName?: string | null;
+  categorySuggestionConfidence?: number | null;
+  categorySuggestionReason?: string | null;
   chunkCount: number;
   previewCount: number;
   lowConfidenceCount: number;
@@ -453,6 +458,12 @@ export default function KnowledgeBasePage() {
           }
         : preview
     );
+  }
+
+  function applySuggestedImportCategory() {
+    if (!importPreview?.suggestedCategoryId) return;
+    setSelectedCategoryId(importPreview.suggestedCategoryId);
+    setMobileShowDetail(true);
   }
 
   async function toggleEntryActive(entry: KnowledgeEntry) {
@@ -1070,6 +1081,36 @@ export default function KnowledgeBasePage() {
                       <p className="text-xs text-owly-text-light mt-0.5">
                         Nguồn đọc: {importPreview.sourceType}
                       </p>
+                      {importPreview.suggestedCategoryName && (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+                          <span className="px-2 py-1 rounded-md bg-blue-50 text-blue-700">
+                            Loại: {importPreview.suggestedKnowledgeKind || "unknown"}
+                          </span>
+                          <span className="px-2 py-1 rounded-md bg-owly-primary-50 text-owly-primary">
+                            Gợi ý: {importPreview.suggestedCategoryName}
+                          </span>
+                          {importPreview.categorySuggestionConfidence !== null &&
+                            importPreview.categorySuggestionConfidence !== undefined && (
+                              <span className="text-owly-text-light">
+                                {Math.round(importPreview.categorySuggestionConfidence * 100)}%
+                              </span>
+                            )}
+                          {importPreview.suggestedCategoryId &&
+                            importPreview.suggestedCategoryId !== selectedCategoryId && (
+                              <button
+                                onClick={applySuggestedImportCategory}
+                                className="font-medium text-owly-primary hover:text-owly-primary-dark"
+                              >
+                                Chuyển sang danh mục này
+                              </button>
+                            )}
+                        </div>
+                      )}
+                      {importPreview.categorySuggestionReason && (
+                        <p className="text-xs text-owly-text-light mt-1">
+                          {importPreview.categorySuggestionReason}
+                        </p>
+                      )}
                     </div>
                     <div
                       className={cn(
@@ -1143,6 +1184,16 @@ export default function KnowledgeBasePage() {
                               {section.sourceFormat && (
                                 <span className="px-1.5 py-0.5 rounded bg-gray-100">
                                   {section.sourceFormat}
+                                </span>
+                              )}
+                              {typeof section.metadata.documentKind === "string" && (
+                                <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700">
+                                  {section.metadata.documentKind}
+                                </span>
+                              )}
+                              {typeof section.metadata.geminiType === "string" && (
+                                <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700">
+                                  {section.metadata.geminiType}
                                 </span>
                               )}
                               <span>{section.contentLength} ký tự</span>

@@ -6,6 +6,7 @@ import {
   mergeChannelConfigPreservingSecrets,
   sanitizeChannelForClient,
 } from "@/lib/channels/config";
+import { upsertDefaultChannelAccountFromChannel } from "@/lib/channels/accounts";
 
 const CHANNEL_TYPES = [
   "widget",
@@ -98,6 +99,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       },
     });
 
+    await upsertDefaultChannelAccountFromChannel({
+      type,
+      config: channel.config,
+      isActive: channel.isActive,
+      status: channel.status,
+    });
+
     return NextResponse.json(sanitizeChannelForClient(channel));
   } catch (error) {
     logger.error("Failed to update channel:", error);
@@ -145,6 +153,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
           status: "disconnected",
         },
       });
+      await upsertDefaultChannelAccountFromChannel({
+        type,
+        config: updated.config,
+        isActive: updated.isActive,
+        status: updated.status,
+      });
+
       return NextResponse.json({
         ...sanitizeChannelForClient(updated),
         message: `${type} channel disconnected`,

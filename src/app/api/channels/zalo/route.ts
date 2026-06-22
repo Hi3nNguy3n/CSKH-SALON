@@ -1,3 +1,4 @@
+import type { Prisma } from "@/generated/prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
@@ -12,11 +13,17 @@ import {
   sendZaloMessage,
   sendZaloImageMessage,
 } from "@/lib/channels/zalo";
+import { upsertDefaultChannelAccountFromChannel } from "@/lib/channels/accounts";
+import {
+  mergeChannelConfigPreservingSecrets,
+  sanitizeChannelForClient,
+} from "@/lib/channels/config";
 
 type ZaloConfig = {
   pythonCommand?: string;
   scriptPath?: string;
   cookiesInput?: string;
+  relaySecret?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -44,21 +51,37 @@ export async function PUT(request: NextRequest) {
       await syncZaloSessionFiles(config as ZaloConfig);
     }
 
+    const existingChannel = await prisma.channel.findUnique({
+      where: { type: "zalo" },
+    });
+    const mergedConfig = mergeChannelConfigPreservingSecrets(
+      "zalo",
+      config,
+      existingChannel?.config
+    );
+
     const channel = await prisma.channel.upsert({
       where: { type: "zalo" },
       update: {
-        config: config ?? undefined,
+        config: mergedConfig as Prisma.InputJsonValue,
         isActive: typeof isActive === "boolean" ? isActive : undefined,
       },
       create: {
         type: "zalo",
-        config: config ?? {},
+        config: mergedConfig as Prisma.InputJsonValue,
         isActive: typeof isActive === "boolean" ? isActive : false,
         status: "disconnected",
       },
     });
 
-    return NextResponse.json(channel);
+    await upsertDefaultChannelAccountFromChannel({
+      type: "zalo",
+      config: channel.config,
+      isActive: channel.isActive,
+      status: channel.status,
+    });
+
+    return NextResponse.json(sanitizeChannelForClient(channel));
   } catch (error) {
     logger.error("[Zalo Route] Failed to update config:", error);
     return NextResponse.json(

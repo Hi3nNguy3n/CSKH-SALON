@@ -71,6 +71,7 @@ function createMockPrismaClient() {
     "conversationTag",
     "callLog",
     "channel",
+    "channelAccount",
     "schedule",
     "webhook",
     "webhookDelivery",

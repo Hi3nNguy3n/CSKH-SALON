@@ -10,6 +10,7 @@ interface ZaloConfig {
   pythonCommand?: string;
   scriptPath?: string;
   cookiesInput?: string;
+  relaySecret?: string;
 }
 
 function toJsonConfig(config: ZaloConfig): Record<string, string> {
@@ -17,6 +18,7 @@ function toJsonConfig(config: ZaloConfig): Record<string, string> {
     pythonCommand: config.pythonCommand || "",
     scriptPath: config.scriptPath || "",
     cookiesInput: config.cookiesInput || "",
+    relaySecret: config.relaySecret || "",
   };
 }
 
@@ -26,14 +28,38 @@ interface ParsedSession {
   userAgent?: string;
 }
 
-let zaloProcess: ChildProcessWithoutNullStreams | null = null;
-let zaloStatus: ZaloStatus = "disconnected";
-let zaloMessage = "Zalo bot is not running";
+type ZaloRuntime = {
+  process: ChildProcessWithoutNullStreams | null;
+  status: ZaloStatus;
+  message: string;
+};
 
-function getRuntimeDir(): string {
-  return process.env.ZALO_RUNTIME_DIR?.trim()
+const zaloRuntimes = new Map<string, ZaloRuntime>();
+
+function normalizeAccountId(accountId?: string): string {
+  return (accountId || "default").trim().replace(/[^a-zA-Z0-9._-]/g, "_") || "default";
+}
+
+function getRuntimeState(accountId?: string): ZaloRuntime {
+  const key = normalizeAccountId(accountId);
+  const existing = zaloRuntimes.get(key);
+  if (existing) return existing;
+
+  const runtime: ZaloRuntime = {
+    process: null,
+    status: "disconnected",
+    message: "Zalo bot is not running",
+  };
+  zaloRuntimes.set(key, runtime);
+  return runtime;
+}
+
+function getRuntimeDir(accountId?: string): string {
+  const baseDir = process.env.ZALO_RUNTIME_DIR?.trim()
     ? path.resolve(process.env.ZALO_RUNTIME_DIR)
     : path.resolve(process.cwd(), "data-runtime");
+  const key = normalizeAccountId(accountId);
+  return key === "default" ? baseDir : path.resolve(baseDir, "zalo", key);
 }
 
 function resolveScriptPath(scriptPath?: string): string {
@@ -128,9 +154,12 @@ function parseSession(cookiesInput: string): ParsedSession {
   return { cookies, imei, userAgent };
 }
 
-export async function syncZaloSessionFiles(config: ZaloConfig): Promise<void> {
+export async function syncZaloSessionFiles(
+  config: ZaloConfig,
+  accountId?: string
+): Promise<void> {
   const session = parseSession(config.cookiesInput || "");
-  const runtimeDir = getRuntimeDir();
+  const runtimeDir = getRuntimeDir(accountId);
 
   await fs.mkdir(runtimeDir, { recursive: true });
 
@@ -153,106 +182,143 @@ export async function syncZaloSessionFiles(config: ZaloConfig): Promise<void> {
   }
 }
 
-export function getZaloStatus() {
+export function getZaloStatus(accountId?: string) {
+  const runtime = getRuntimeState(accountId);
   return {
-    status: zaloStatus,
-    message: zaloMessage,
-    pid: zaloProcess?.pid ?? null,
+    status: runtime.status,
+    message: runtime.message,
+    pid: runtime.process?.pid ?? null,
   };
 }
 
-export async function startZaloBot(config: ZaloConfig) {
-  if (zaloProcess && !zaloProcess.killed) {
-    return getZaloStatus();
+async function updateZaloStoredStatus(
+  config: ZaloConfig,
+  status: ZaloStatus,
+  isActive: boolean,
+  accountId?: string
+) {
+  const key = normalizeAccountId(accountId);
+
+  try {
+    if (accountId && key !== "default") {
+      await prisma.channelAccount.update({
+        where: { id: accountId },
+        data: {
+          status,
+          isActive,
+          lastConnectedAt: status === "connected" ? new Date() : undefined,
+        },
+      });
+      return;
+    }
+
+    await prisma.channel.upsert({
+      where: { type: "zalo" },
+      update: { isActive, status },
+      create: {
+        type: "zalo",
+        isActive,
+        status,
+        config: toJsonConfig(config),
+      },
+    });
+  } catch (error) {
+    logger.warn("[Zalo] Failed to update stored runtime status", {
+      accountId: accountId || "default",
+      status,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+export async function startZaloBot(config: ZaloConfig, accountId?: string) {
+  const runtime = getRuntimeState(accountId);
+  if (runtime.process && !runtime.process.killed) {
+    return getZaloStatus(accountId);
   }
 
-  await syncZaloSessionFiles(config);
+  await syncZaloSessionFiles(config, accountId);
 
   const pythonCommand = config.pythonCommand?.trim() || "python3";
   const scriptPath = resolveScriptPath(config.scriptPath);
+  const normalizedAccountId = normalizeAccountId(accountId);
 
-  zaloStatus = "disconnected";
-  zaloMessage = `Starting Zalo bot with ${pythonCommand}...`;
+  runtime.status = "disconnected";
+  runtime.message = `Starting Zalo bot with ${pythonCommand}...`;
 
   const child = spawn(pythonCommand, [scriptPath], {
     cwd: process.cwd(),
-    env: process.env,
+    env: getZaloSpawnEnv(accountId, config),
   });
 
-  zaloProcess = child;
+  runtime.process = child;
 
   child.stdout.on("data", (data: Buffer) => {
     const text = data.toString().trim();
-    if (text) logger.info(`[Zalo] ${text}`);
+    if (text) logger.info(`[Zalo:${normalizedAccountId}] ${text}`);
   });
 
   child.stderr.on("data", (data: Buffer) => {
     const text = data.toString().trim();
-    if (text) logger.error(`[Zalo] ${text}`);
+    if (text) logger.error(`[Zalo:${normalizedAccountId}] ${text}`);
   });
 
   child.once("spawn", async () => {
-    zaloStatus = "connected";
-    zaloMessage = "Zalo bot is running";
-    await prisma.channel.upsert({
-      where: { type: "zalo" },
-      update: { isActive: true, status: "connected" },
-      create: {
-        type: "zalo",
-        isActive: true,
-        status: "connected",
-        config: toJsonConfig(config),
-      },
-    });
+    runtime.status = "connected";
+    runtime.message = "Zalo bot is running";
+    await updateZaloStoredStatus(config, "connected", true, accountId);
   });
 
   child.once("exit", async (code, signal) => {
-    zaloProcess = null;
-    zaloStatus = code === 0 || signal === "SIGTERM" ? "disconnected" : "error";
-    zaloMessage =
+    runtime.process = null;
+    runtime.status = code === 0 || signal === "SIGTERM" ? "disconnected" : "error";
+    runtime.message =
       code === 0 || signal === "SIGTERM"
         ? "Zalo bot stopped"
         : `Zalo bot exited unexpectedly (code=${code ?? "null"})`;
 
-    await prisma.channel.upsert({
-      where: { type: "zalo" },
-      update: { status: "disconnected", isActive: false },
-      create: {
-        type: "zalo",
-        isActive: false,
-        status: "disconnected",
-        config: toJsonConfig(config),
-      },
-    });
+    await updateZaloStoredStatus(config, "disconnected", false, accountId);
   });
 
-  return getZaloStatus();
+  return getZaloStatus(accountId);
 }
 
-export async function stopZaloBot() {
-  if (zaloProcess && !zaloProcess.killed) {
-    zaloProcess.kill("SIGTERM");
+export async function stopZaloBot(accountId?: string) {
+  const runtime = getRuntimeState(accountId);
+  if (runtime.process && !runtime.process.killed) {
+    runtime.process.kill("SIGTERM");
   }
 
-  zaloProcess = null;
-  zaloStatus = "disconnected";
-  zaloMessage = "Zalo bot stopped";
+  runtime.process = null;
+  runtime.status = "disconnected";
+  runtime.message = "Zalo bot stopped";
 
-  await prisma.channel.upsert({
-    where: { type: "zalo" },
-    update: { isActive: false, status: "disconnected" },
-    create: { type: "zalo", isActive: false, status: "disconnected", config: {} },
-  });
+  await updateZaloStoredStatus({}, "disconnected", false, accountId);
 
-  return getZaloStatus();
+  return getZaloStatus(accountId);
+}
+
+function getRelaySecret(config?: ZaloConfig): string {
+  return config?.relaySecret?.trim() || "";
+}
+
+function getZaloSpawnEnv(accountId?: string, config?: ZaloConfig): NodeJS.ProcessEnv {
+  const relaySecret = getRelaySecret(config);
+  return {
+    ...process.env,
+    ZALO_RUNTIME_DIR: getRuntimeDir(accountId),
+    ZALO_ACCOUNT_ID: normalizeAccountId(accountId),
+    ...(relaySecret ? { ZALO_RELAY_SECRET: relaySecret } : {}),
+  };
 }
 
 export async function sendZaloMessage(
   config: ZaloConfig,
   phoneNumber: string,
-  message: string
+  message: string,
+  accountId?: string
 ): Promise<{ success: boolean; output: string }> {
-  await syncZaloSessionFiles(config);
+  await syncZaloSessionFiles(config, accountId);
 
   const pythonCommand = config.pythonCommand?.trim() || "python3";
   const scriptPath = resolveScriptPath(config.scriptPath);
@@ -263,7 +329,7 @@ export async function sendZaloMessage(
       [scriptPath, "send", "--phone", phoneNumber, "--message", message],
       {
         cwd: process.cwd(),
-        env: process.env,
+        env: getZaloSpawnEnv(accountId, config),
       }
     );
 
@@ -297,9 +363,10 @@ export async function sendZaloImageMessage(
   config: ZaloConfig,
   phoneNumber: string,
   message: string,
-  imagePath: string
+  imagePath: string,
+  accountId?: string
 ): Promise<{ success: boolean; output: string }> {
-  await syncZaloSessionFiles(config);
+  await syncZaloSessionFiles(config, accountId);
 
   const pythonCommand = config.pythonCommand?.trim() || "python3";
   const scriptPath = resolveScriptPath(config.scriptPath);
@@ -319,7 +386,7 @@ export async function sendZaloImageMessage(
       ],
       {
         cwd: process.cwd(),
-        env: process.env,
+        env: getZaloSpawnEnv(accountId, config),
       }
     );
 

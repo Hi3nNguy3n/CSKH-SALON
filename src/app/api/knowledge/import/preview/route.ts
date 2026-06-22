@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { importKnowledgeDocumentWithGemini } from "@/lib/knowledge/gemini-import";
 import { importKnowledgeDocument } from "@/lib/knowledge/import";
+import { suggestLed1000CategoryForImport } from "@/lib/knowledge/led1000-taxonomy";
 import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import { isAuthenticated, requireAuth } from "@/lib/route-auth";
@@ -98,10 +99,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const availableCategories =
+      (await prisma.category.findMany({
+        select: { id: true, name: true },
+        orderBy: { sortOrder: "asc" },
+      })) || [];
+    const categorySuggestion = suggestLed1000CategoryForImport(
+      imported,
+      file.name,
+      availableCategories
+    );
+
+    if (categorySuggestion.categoryName) {
+      warnings.push(
+        `Gợi ý danh mục: ${categorySuggestion.categoryName} (${categorySuggestion.reason})`
+      );
+    }
+
     return NextResponse.json({
       success: true,
       filename: file.name,
       sourceType: imported.detectedType,
+      suggestedKnowledgeKind: categorySuggestion.knowledgeKind,
+      suggestedCategoryId: categorySuggestion.categoryId,
+      suggestedCategoryName: categorySuggestion.categoryName,
+      categorySuggestionConfidence: categorySuggestion.confidence,
+      categorySuggestionReason: categorySuggestion.reason,
       chunkCount: imported.sections.length,
       previewCount: imported.sections.length,
       lowConfidenceCount,

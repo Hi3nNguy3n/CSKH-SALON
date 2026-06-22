@@ -6,6 +6,7 @@ import {
   mergeChannelConfigPreservingSecrets,
   sanitizeChannelForClient,
 } from "@/lib/channels/config";
+import { upsertDefaultChannelAccountFromChannel } from "@/lib/channels/accounts";
 
 const CHANNEL_TYPES = [
   "widget",
@@ -86,6 +87,13 @@ export async function POST(request: NextRequest) {
         config: mergedConfig ?? {},
         status: "disconnected",
       },
+    });
+
+    await upsertDefaultChannelAccountFromChannel({
+      type,
+      config: channel.config,
+      isActive: channel.isActive,
+      status: channel.status,
     });
 
     return NextResponse.json(sanitizeChannelForClient(channel), { status: 200 });
